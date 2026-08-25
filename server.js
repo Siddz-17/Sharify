@@ -4,8 +4,7 @@ const axios = require('axios');
 const path = require('path');
 const crypto = require('crypto');
 const cookieSession = require('cookie-session');
-const low = require('lowdb');
-const FileSync = require('lowdb/adapters/FileSync');
+const fs = require('fs');
 
 const {
   SPOTIFY_CLIENT_ID,
@@ -22,11 +21,66 @@ if (!SPOTIFY_CLIENT_ID || !SPOTIFY_CLIENT_SECRET || !REDIRECT_URI) {
   process.exit(1);
 }
 
-// --- tiny JSON "database" of friends (one row per connected friend) ---
-const dbPath = process.env.DATABASE_PATH || path.join(__dirname, 'db.json');
-const adapter = new FileSync(dbPath);
-const db = low(adapter);
-db.defaults({ friends: [] }).write();
+const {
+  JSONBIN_BIN_ID,
+  JSONBIN_API_KEY,
+  DATABASE_PATH,
+} = process.env;
+
+const dbPath = DATABASE_PATH || path.join(__dirname, 'db.json');
+
+// Cloud storage helper functions using JSONbin.io
+async function getFriends() {
+  if (JSONBIN_BIN_ID && JSONBIN_API_KEY) {
+    try {
+      const res = await axios.get(`https://api.jsonbin.io/v3/b/${JSONBIN_BIN_ID}/latest`, {
+        headers: { 'X-Master-Key': JSONBIN_API_KEY },
+      });
+      return res.data.record?.friends || [];
+    } catch (err) {
+      console.error('Failed to read from JSONbin, falling back:', err.response?.data || err.message);
+    }
+  }
+
+  // Local fallback
+  try {
+    if (fs.existsSync(dbPath)) {
+      const raw = fs.readFileSync(dbPath, 'utf8');
+      const parsed = JSON.parse(raw);
+      return parsed.friends || [];
+    }
+  } catch (err) {
+    console.error('Failed to read local DB:', err.message);
+  }
+  return [];
+}
+
+async function saveFriends(friends) {
+  if (JSONBIN_BIN_ID && JSONBIN_API_KEY) {
+    try {
+      await axios.put(
+        `https://api.jsonbin.io/v3/b/${JSONBIN_BIN_ID}`,
+        { friends },
+        {
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Master-Key': JSONBIN_API_KEY,
+          },
+        }
+      );
+      return;
+    } catch (err) {
+      console.error('Failed to write to JSONbin, falling back to local:', err.response?.data || err.message);
+    }
+  }
+
+  // Local fallback
+  try {
+    fs.writeFileSync(dbPath, JSON.stringify({ friends }, null, 2), 'utf8');
+  } catch (err) {
+    console.error('Failed to write local DB:', err.message);
+  }
+}
 
 const app = express();
 app.use(
@@ -101,7 +155,6 @@ app.get('/callback', async (req, res) => {
     const spotifyProfileName = profileRes.data.display_name || displayNameFromLogin;
     const avatarUrl = profileRes.data.images?.[0]?.url || '';
 
-    const existing = db.get('friends').find({ spotifyId }).value();
     const record = {
       spotifyId,
       name: displayNameFromLogin || spotifyProfileName,
@@ -112,11 +165,14 @@ app.get('/callback', async (req, res) => {
       expiresAt: Date.now() + expires_in * 1000,
     };
 
-    if (existing) {
-      db.get('friends').find({ spotifyId }).assign(record).write();
+    const friends = await getFriends();
+    const index = friends.findIndex((f) => f.spotifyId === spotifyId);
+    if (index > -1) {
+      friends[index] = record;
     } else {
-      db.get('friends').push(record).write();
+      friends.push(record);
     }
+    await saveFriends(friends);
 
     res.redirect('/?connected=' + encodeURIComponent(record.name));
   } catch (err) {
@@ -146,16 +202,19 @@ async function ensureFreshToken(friend) {
     }
   );
   const { access_token, expires_in } = tokenRes.data;
-  db.get('friends')
-    .find({ spotifyId: friend.spotifyId })
-    .assign({ accessToken: access_token, expiresAt: Date.now() + expires_in * 1000 })
-    .write();
+  const friends = await getFriends();
+  const index = friends.findIndex((f) => f.spotifyId === friend.spotifyId);
+  if (index > -1) {
+    friends[index].accessToken = access_token;
+    friends[index].expiresAt = Date.now() + expires_in * 1000;
+    await saveFriends(friends);
+  }
   return access_token;
 }
 
 // Step 3: dashboard polls this to see what everyone is playing right now.
 app.get('/api/friends', async (req, res) => {
-  const friends = db.get('friends').value();
+  const friends = await getFriends();
 
   const results = await Promise.all(
     friends.map(async (friend) => {
@@ -239,13 +298,14 @@ app.get('/api/friends', async (req, res) => {
 });
 
 // Step 4: disconnect a friend
-app.delete('/api/friends/:id', (req, res) => {
+app.delete('/api/friends/:id', async (req, res) => {
   const { id } = req.params;
-  const existing = db.get('friends').find({ spotifyId: id }).value();
-  if (!existing) {
+  const friends = await getFriends();
+  const filtered = friends.filter((f) => f.spotifyId !== id);
+  if (filtered.length === friends.length) {
     return res.status(404).send('Friend not found');
   }
-  db.get('friends').remove({ spotifyId: id }).write();
+  await saveFriends(filtered);
   res.json({ success: true });
 });
 
