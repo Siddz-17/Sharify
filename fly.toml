@@ -1,0 +1,22 @@
+# fly.toml configuration for Fly.io deployment
+
+app = "" # Will be populated automatically when you run 'fly launch'
+primary_region = "bos" # Default region (Boston). You can change this during fly launch.
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  PORT = "8080"
+  DATABASE_PATH = "/data/db.json"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = false
+  auto_start_machines = true
+  min_machines_running = 1
+
+[[mounts]]
+  source = "spotify_friends_data"
+  destination = "/data"
