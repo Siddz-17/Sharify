@@ -908,11 +908,11 @@
       );
     }
 
-    // Poll server for fresh state
+    // Poll backend for fresh data
     async function refresh() {
       try {
         const res = await fetch('/api/friends');
-        if (!res.ok) throw new Error('API server returned error');
+        if (!res.ok) throw new Error('Failed to fetch');
         const friends = await res.json();
         
         // Calculate dynamic server-client time offset for accuracy
@@ -926,6 +926,18 @@
           }
           return f;
         });
+
+        // Self-healing session check: if they have a local connection name, 
+        // but that name is not in the active friends list, clear their local session!
+        const connectedUser = localStorage.getItem('connectedUser');
+        if (connectedUser) {
+          const userExists = friendsState.some(f => f.name.toLowerCase() === connectedUser.toLowerCase());
+          if (!userExists) {
+            localStorage.removeItem('connectedUser');
+            localStorage.removeItem('adminKey');
+            updateLayout();
+          }
+        }
 
         render();
       } catch (err) {
