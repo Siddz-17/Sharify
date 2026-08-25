@@ -300,6 +300,15 @@ app.get('/api/friends', async (req, res) => {
 // Step 4: disconnect a friend
 app.delete('/api/friends/:id', async (req, res) => {
   const { id } = req.params;
+  
+  // Super Admin security check
+  const adminKeyHeader = req.headers['x-admin-key'];
+  const expectedAdminKey = process.env.ADMIN_KEY || 'siddharth-admin-default';
+  
+  if (adminKeyHeader !== expectedAdminKey) {
+    return res.status(403).json({ error: 'Unauthorized: Only the Super Admin can disconnect users.' });
+  }
+
   const friends = await getFriends();
   const filtered = friends.filter((f) => f.spotifyId !== id);
   if (filtered.length === friends.length) {

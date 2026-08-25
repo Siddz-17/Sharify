@@ -814,25 +814,41 @@
       }
     }
 
-    // Delete a friend connection
+    // Delete a friend connection (Secured for Super Admin)
     async function disconnectFriend(spotifyId, friendName) {
       if (!confirm(`Are you sure you want to disconnect ${friendName} from the dashboard?`)) {
         return;
       }
 
+      let adminKey = localStorage.getItem('adminKey');
+      if (!adminKey) {
+        adminKey = prompt('Please enter the Admin Key to confirm this action:');
+        if (!adminKey) return;
+      }
+
       try {
-        const res = await fetch(`/api/friends/${spotifyId}`, { method: 'DELETE' });
+        const res = await fetch(`/api/friends/${spotifyId}`, {
+          method: 'DELETE',
+          headers: {
+            'x-admin-key': adminKey
+          }
+        });
         if (res.ok) {
+          localStorage.setItem('adminKey', adminKey); // Cache it on success
           showToast(`Disconnected ${friendName}.`);
           
           // If they disconnected themselves, clean localStorage and expand layout again
           const connectedUser = localStorage.getItem('connectedUser');
           if (connectedUser && friendName.toLowerCase() === connectedUser.toLowerCase()) {
             localStorage.removeItem('connectedUser');
+            localStorage.removeItem('adminKey');
             updateLayout();
           }
 
           refresh();
+        } else if (res.status === 403) {
+          localStorage.removeItem('adminKey'); // Clear invalid cache key
+          showToast('Incorrect Admin Key. Action denied.');
         } else {
           showToast(`Failed to disconnect.`);
         }
@@ -941,6 +957,7 @@
       }
 
       const connectedUser = localStorage.getItem('connectedUser');
+      const isAdmin = connectedUser && connectedUser.toLowerCase().includes('siddharth');
 
       container.innerHTML = friendsState.map(friend => {
         const isMe = connectedUser && friend.name.toLowerCase() === connectedUser.toLowerCase();
@@ -948,6 +965,22 @@
         const spotifyId = friend.spotifyId;
         const avatar = friend.avatarUrl || 'https://www.gravatar.com/avatar/00000000000000000000000000000000?d=mp&f=y';
         
+        // Safely escape single quotes for inline JS attributes
+        const escapedFriendName = friend.name.replace(/'/g, "\\'");
+
+        // Disconnect controls, rendered only for Super Admin (Siddharth)
+        const deleteButtonHtml = isAdmin ? `
+          <button class="disconnect-btn" onclick="disconnectFriend('${spotifyId}', '${escapedFriendName}')" title="Disconnect Account">
+            <i data-lucide="x" style="width: 16px; height: 16px;"></i>
+          </button>
+        ` : '';
+
+        const deleteButtonErrorHtml = isAdmin ? `
+          <button class="disconnect-btn" onclick="disconnectFriend('${spotifyId}', '${escapedFriendName}')" title="Disconnect Account">
+            <i data-lucide="user-minus" style="width: 16px; height: 16px;"></i>
+          </button>
+        ` : '';
+
         // Error state
         if (friend.error) {
           return `
@@ -959,9 +992,7 @@
                   </div>
                   <div class="user-name">${name}</div>
                 </div>
-                <button class="disconnect-btn" onclick="disconnectFriend('${spotifyId}', '${name}')" title="Disconnect Account">
-                  <i data-lucide="user-minus" style="width: 16px; height: 16px;"></i>
-                </button>
+                ${deleteButtonErrorHtml}
               </div>
               <div class="track-details">
                 <div class="track-info">
@@ -997,9 +1028,7 @@
                 </div>
                 <div style="display: flex; align-items: center; gap: 8px;">
                   <span class="status-badge live">Live</span>
-                  <button class="disconnect-btn" onclick="disconnectFriend('${spotifyId}', '${name}')" title="Disconnect Account">
-                    <i data-lucide="x" style="width: 16px; height: 16px;"></i>
-                  </button>
+                  ${deleteButtonHtml}
                 </div>
               </div>
               <div class="track-details">
@@ -1043,9 +1072,7 @@
                 </div>
                 <div style="display: flex; align-items: center; gap: 8px;">
                   <span class="status-badge offline">Offline</span>
-                  <button class="disconnect-btn" onclick="disconnectFriend('${spotifyId}', '${name}')" title="Disconnect Account">
-                    <i data-lucide="x" style="width: 16px; height: 16px;"></i>
-                  </button>
+                  ${deleteButtonHtml}
                 </div>
               </div>
               <div class="track-details">
@@ -1074,9 +1101,7 @@
               </div>
               <div style="display: flex; align-items: center; gap: 8px;">
                 <span class="status-badge offline">Offline</span>
-                <button class="disconnect-btn" onclick="disconnectFriend('${spotifyId}', '${name}')" title="Disconnect Account">
-                  <i data-lucide="x" style="width: 16px; height: 16px;"></i>
-                </button>
+                ${deleteButtonHtml}
               </div>
             </div>
             <div class="track-details">
