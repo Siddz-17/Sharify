@@ -534,6 +534,87 @@
     .banner-close:hover {
       opacity: 1;
     }
+
+    /* Footer Section */
+    footer {
+      display: flex;
+      justify-content: center;
+      margin-top: 40px;
+      padding-top: 24px;
+      border-top: 1px solid var(--border);
+    }
+    .footer-btn {
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid var(--border);
+      color: var(--text-muted);
+      font-weight: 600;
+      padding: 8px 16px;
+      border-radius: 20px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 0.85rem;
+      transition: all 0.3s ease;
+    }
+    .footer-btn:hover {
+      background: rgba(255, 255, 255, 0.1);
+      color: #fff;
+      border-color: var(--border-hover);
+      transform: translateY(-1px);
+    }
+
+    /* Modal Backdrop */
+    .modal-backdrop {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.75);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+      opacity: 0;
+      transition: opacity 0.3s ease;
+    }
+    .modal-backdrop.show {
+      opacity: 1;
+    }
+    .modal-content {
+      background: rgba(22, 27, 34, 0.85);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border: 1px solid var(--border-hover);
+      border-radius: 16px;
+      width: 90%;
+      max-width: 400px;
+      padding: 24px;
+      position: relative;
+      box-shadow: 0 20px 50px rgba(0,0,0,0.6);
+      transform: translateY(20px);
+      transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    }
+    .modal-backdrop.show .modal-content {
+      transform: translateY(0);
+    }
+    .modal-close {
+      position: absolute;
+      top: 16px;
+      right: 16px;
+      background: none;
+      border: none;
+      color: var(--text-muted);
+      cursor: pointer;
+      padding: 4px;
+      display: flex;
+    }
+    .modal-close:hover {
+      color: #fff;
+    }
   </style>
 </head>
 <body>
@@ -574,23 +655,6 @@
             <span>Connect Spotify</span>
           </button>
         </div>
-
-        <div class="panel">
-          <div class="panel-title">
-            <i data-lucide="share-2" style="width: 18px; height: 18px; color: var(--green);"></i>
-            <span>Invite Friends</span>
-          </div>
-          <p class="panel-desc">Generate an invite link tailored for a friend and send it to them so they can join.</p>
-          <div class="form-group">
-            <label for="friendNameInput">FRIEND'S NAME</label>
-            <input id="friendNameInput" class="input-field" placeholder="e.g. Jane" />
-          </div>
-          <button class="btn btn-secondary" onclick="generateInviteLink()">
-            <i data-lucide="copy" style="width: 18px; height: 18px;"></i>
-            <span>Copy Invite Link</span>
-          </button>
-          <div id="inviteLinkDisplay" class="link-display"></div>
-        </div>
       </aside>
 
       <!-- Main Activity Feed -->
@@ -603,6 +667,37 @@
           </div>
         </div>
       </main>
+    </div>
+
+    <!-- Footer Section -->
+    <footer>
+      <button class="footer-btn" onclick="openInviteModal()">
+        <i data-lucide="share-2" style="width: 16px; height: 16px;"></i>
+        <span>Invite Friends</span>
+      </button>
+    </footer>
+  </div>
+
+  <!-- Modal for Inviting Friends -->
+  <div id="inviteModal" class="modal-backdrop" onclick="if(event.target === this) closeInviteModal()">
+    <div class="modal-content">
+      <button class="modal-close" onclick="closeInviteModal()" title="Close">
+        <i data-lucide="x" style="width: 20px; height: 20px;"></i>
+      </button>
+      <div class="panel-title" style="margin-bottom: 8px;">
+        <i data-lucide="share-2" style="width: 18px; height: 18px; color: var(--green);"></i>
+        <span>Invite Friends</span>
+      </div>
+      <p class="panel-desc" style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 16px;">Generate an invite link tailored for a friend and send it to them so they can join.</p>
+      <div class="form-group" style="margin-bottom: 14px;">
+        <label for="friendNameInput" style="display: block; font-size: 0.8rem; color: var(--text-muted); margin-bottom: 6px; font-weight: 500;">FRIEND'S NAME</label>
+        <input id="friendNameInput" class="input-field" placeholder="e.g. Jane" />
+      </div>
+      <button class="btn" onclick="generateInviteLink()">
+        <i data-lucide="copy" style="width: 18px; height: 18px;"></i>
+        <span>Copy Invite Link</span>
+      </button>
+      <div id="inviteLinkDisplay" class="link-display"></div>
     </div>
   </div>
 
@@ -622,6 +717,7 @@
     const connectedName = params.get('connected');
     if (connectedName) {
       localStorage.setItem('connectedUser', connectedName);
+      updateLayout();
       document.getElementById('banner-placeholder').innerHTML = `
         <div class="banner">
           <div style="display: flex; align-items: center; gap: 8px;">
@@ -637,11 +733,22 @@
       window.history.replaceState({}, document.title, window.location.pathname);
     }
 
-    // Hide Add Yourself panel if the user is already connected
-    const connectedUser = localStorage.getItem('connectedUser');
-    if (connectedUser) {
-      const panel = document.getElementById('addYourselfPanel');
-      if (panel) panel.style.display = 'none';
+    // Hide Add Yourself panel and collapse layout if the user is already connected
+    function updateLayout() {
+      const connectedUser = localStorage.getItem('connectedUser');
+      const addPanel = document.getElementById('addYourselfPanel');
+      const aside = document.querySelector('aside');
+      const grid = document.querySelector('.layout-grid');
+      
+      if (connectedUser) {
+        if (addPanel) addPanel.style.display = 'none';
+        if (aside) aside.style.display = 'none';
+        if (grid) grid.style.gridTemplateColumns = '1fr';
+      } else {
+        if (addPanel) addPanel.style.display = 'block';
+        if (aside) aside.style.display = 'block';
+        if (grid) grid.style.gridTemplateColumns = '320px 1fr';
+      }
     }
 
     function closeBanner() {
@@ -681,9 +788,30 @@
         linkDisplay.style.display = 'block';
         showToast(`Invite link copied for ${name}!`);
         friendNameInput.value = '';
+        // Automatically close modal after 1.5 seconds so they see the result
+        setTimeout(closeInviteModal, 1500);
       }).catch(err => {
         showToast('Could not auto-copy. Link: ' + inviteUrl);
       });
+    }
+
+    // Modal Control Functions
+    function openInviteModal() {
+      const modal = document.getElementById('inviteModal');
+      if (modal) {
+        document.getElementById('friendNameInput').value = '';
+        document.getElementById('inviteLinkDisplay').style.display = 'none';
+        modal.style.display = 'flex';
+        setTimeout(() => modal.classList.add('show'), 10);
+      }
+    }
+
+    function closeInviteModal() {
+      const modal = document.getElementById('inviteModal');
+      if (modal) {
+        modal.classList.remove('show');
+        setTimeout(() => modal.style.display = 'none', 300);
+      }
     }
 
     // Delete a friend connection
@@ -697,12 +825,11 @@
         if (res.ok) {
           showToast(`Disconnected ${friendName}.`);
           
-          // If they disconnected themselves, clean localStorage and show panel again
+          // If they disconnected themselves, clean localStorage and expand layout again
           const connectedUser = localStorage.getItem('connectedUser');
           if (connectedUser && friendName.toLowerCase() === connectedUser.toLowerCase()) {
             localStorage.removeItem('connectedUser');
-            const panel = document.getElementById('addYourselfPanel');
-            if (panel) panel.style.display = 'block';
+            updateLayout();
           }
 
           refresh();
@@ -992,6 +1119,7 @@
     }
 
     // Initial setup and timers
+    updateLayout();
     refresh();
     startProgressTicking();
     
