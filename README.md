@@ -1,57 +1,54 @@
-# Spotify Friend Activity
+# Sharify — Real-time Social Music Hub & Playback Sync
 
-See what you and your friends are currently playing on Spotify, using the *official*
-Web API (not the private buddylist endpoint). Each person connects their own
-Spotify account via OAuth, so it's fully within Spotify's terms.
+Sharify transforms Spotify into a private, real-time social music lounge for you and your circle. See what your friends are playing, sync and listen along to tracks in real-time, vibe in the real-time chat lounge, share interactive song cards, compare music tastes, and generate Spotify Blend playlists.
 
-How it works: each friend clicks a personal "Connect Spotify" link, approves
-read-only access to their currently-playing track, and their token is stored
-on your server. The dashboard polls `/api/friends` every 15s and shows
-everyone's live status.
+---
 
-## 1. Create a Spotify app
+## 🌟 Key Features
 
-1. Go to https://developer.spotify.com/dashboard and log in.
-2. Click **Create app**.
-3. Fill in a name/description, and add this exact Redirect URI:
-   `http://127.0.0.1:8888/callback` (or your own domain later).
-4. Save. Copy the **Client ID** and **Client Secret** from Settings.
+* **🎧 Selective Friend Network**: Your feed only displays tracks from friends you've added (or invited via your unique Friend Code `SHAR-XXXX` or QR code).
+* **📻 1-Click "Listen Along" (Sync Playback)**: Jump directly to the exact song and live timestamp a friend is listening to on your own Spotify player with one click.
+* **💬 Real-Time Music Lounge & Chat**: Built-in chat room with typing indicators, live message streams, and a 1-click **"Share What I'm Playing"** button that embeds interactive song cards right into the conversation.
+* **🔥 Live Floating Reactions**: Send instant emoji reactions (🔥, ❤️, 🕺, ⚡, ☕, 💀) that float in real-time across friend cards.
+* **✨ Music Taste Match & Spotify Blend**: Calculate your musical compatibility score with any friend based on top artists and genres, and auto-generate an official "Sharify Blend" playlist in Spotify.
+* **📱 Instant QR Code & Invite System**: Share your unique invite QR code or link so nearby friends can scan with their phone camera to instantly connect and be added to your circle.
+* **🔊 30-Second Audio Previews**: Sample tracks directly in the browser before queueing or syncing.
+* **🎨 Ambient Visuals & Live Equalizer**: Cards feature animated equalizer frequency bars and dynamic backlights.
 
-> Note: a new Spotify app starts in **Development Mode**, which caps you at
-> 25 users. You'll need to add each friend's Spotify email under
-> **Users and Access** in the dashboard before they can log in — Spotify
-> requires this allow-list step for dev-mode apps. That's fine for a
-> friend-group project.
+---
 
-## 2. Configure
+## 🚀 Quickstart Guide
 
-```bash
-cd spotify-friends
-cp .env.example .env
-# edit .env and paste in your Client ID / Client Secret
-npm install
+### 1. Spotify App Setup
+1. Go to the [Spotify Developer Dashboard](https://developer.spotify.com/dashboard) and log in.
+2. Click **Create app** (or use an existing app).
+3. Set the **Redirect URI** to:
+   `http://127.0.0.1:8888/callback` (or your public tunnel URL: `https://your-tunnel.loca.lt/callback`).
+4. Copy the **Client ID** and **Client Secret** from the app settings.
+5. In **Users and Access**, add the Spotify account emails of your friends (required for Development mode apps).
+
+### 2. Configure Environment
+Copy `.env.example` to `.env` and fill in your credentials:
+```env
+SPOTIFY_CLIENT_ID=your_client_id_here
+SPOTIFY_CLIENT_SECRET=your_client_secret_here
+REDIRECT_URI=http://127.0.0.1:8888/callback
+PORT=8888
+SESSION_SECRET=a-secure-random-string
 ```
 
-## 3. Run
-
+### 3. Install & Start
 ```bash
+npm install
 npm start
 ```
+Visit **http://127.0.0.1:8888** in your browser.
 
-Visit **http://127.0.0.1:8888**. Enter your name, click "Connect Spotify",
-approve access. Send the same page to friends (once you've added their
-emails in the dashboard) so they can connect too.
+---
 
-## Notes / limitations
-
-- Only shows a *currently playing* track — Spotify's public API has no
-  "friend feed" endpoint, so this polls each connected friend individually.
-- Tokens are stored in a local `db.json` file (plaintext) for simplicity.
-  Fine for personal/local use; don't ship this as-is to the public internet
-  without encrypting tokens and using HTTPS.
-- Dev-mode apps require you to allow-list each friend's Spotify account
-  email before they can authorize. To go past 25 users you'd need to request
-  **Extended Quota Mode** from Spotify.
-- If a friend disconnects/revokes access, their card will just show
-  "Couldn't fetch" — you can add a way to remove them from `db.json` if
-  needed.
+## 🌐 Public Sharing (Localtunnel)
+To share your local instance over the internet with friends:
+```bash
+node tunnel.js
+```
+Copy the generated tunnel URL and add `<tunnel_url>/callback` to your Spotify Developer Dashboard redirect URIs.

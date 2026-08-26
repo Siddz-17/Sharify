@@ -3,33 +3,46 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Sharify</title>
+  <title>Sharify — Real-time Social Music Hub</title>
+  
   <!-- PWA meta tags -->
   <link rel="manifest" href="/manifest.json" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-  <meta name="theme-color" content="#090b0f" />
+  <meta name="theme-color" content="#080a0f" />
   <link rel="apple-touch-icon" href="https://img.icons8.com/color/512/spotify--v1.png" />
 
-  <!-- Google Fonts: Plus Jakarta Sans -->
+  <!-- Google Fonts: Plus Jakarta Sans & Outfit -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@500;600;700;800&family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  
   <!-- Lucide Icons -->
   <script src="https://unpkg.com/lucide@latest"></script>
-  
+  <!-- Socket.IO Client -->
+  <script src="/socket.io/socket.io.js"></script>
+  <!-- QRCode.js -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+
   <style>
     :root {
-      --bg: #090b0f;
-      --card: rgba(22, 27, 34, 0.45);
-      --card-hover: rgba(33, 38, 45, 0.65);
-      --green: #1db954;
-      --green-glow: rgba(29, 185, 84, 0.25);
+      --bg: #080a0f;
+      --bg-surface: #0e121a;
+      --card: rgba(18, 23, 33, 0.65);
+      --card-hover: rgba(28, 35, 49, 0.85);
+      --green: #1ed760;
+      --green-glow: rgba(30, 215, 96, 0.3);
+      --purple: #9d4edd;
+      --purple-glow: rgba(157, 78, 221, 0.3);
       --text: #f0f6fc;
       --text-muted: #8b949e;
+      --text-dim: #545d68;
       --border: rgba(255, 255, 255, 0.08);
-      --border-hover: rgba(255, 255, 255, 0.16);
-      --shadow: rgba(0, 0, 0, 0.4);
+      --border-hover: rgba(255, 255, 255, 0.18);
+      --shadow: rgba(0, 0, 0, 0.5);
+      --radius-sm: 8px;
+      --radius-md: 14px;
+      --radius-lg: 20px;
     }
 
     * {
@@ -39,172 +52,260 @@
     }
 
     body {
-      font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
       background-color: var(--bg);
       color: var(--text);
       min-height: 100vh;
       overflow-x: hidden;
-      padding: 40px 20px 80px;
+      display: flex;
+      flex-direction: column;
       line-height: 1.5;
     }
 
-    /* Ambient Glowing Blobs */
     .blob {
       position: fixed;
-      width: 400px;
-      height: 400px;
+      width: 500px;
+      height: 500px;
       border-radius: 50%;
-      filter: blur(120px);
+      filter: blur(140px);
       z-index: -1;
-      opacity: 0.12;
+      opacity: 0.14;
       pointer-events: none;
-      transition: all 1s ease;
+      transition: all 1.2s ease;
     }
     .blob-1 {
       background: var(--green);
-      top: -100px;
+      top: -120px;
       right: -100px;
     }
     .blob-2 {
-      background: #8a2be2;
+      background: #7928ca;
       bottom: -150px;
-      left: -150px;
+      left: -120px;
     }
 
-    .container {
-      max-width: 1100px;
+    .app-container {
+      max-width: 1240px;
       margin: 0 auto;
+      padding: 24px 20px 80px;
+      width: 100%;
+      flex: 1;
     }
 
-    /* Header styling */
     header {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      margin-bottom: 40px;
+      margin-bottom: 28px;
       border-bottom: 1px solid var(--border);
-      padding-bottom: 24px;
+      padding-bottom: 20px;
+      gap: 16px;
+      flex-wrap: wrap;
     }
-    .logo-area {
+    .brand-section {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+    .brand-logo {
+      background: linear-gradient(135deg, #1ed760, #00b4d8);
+      color: #000;
+      width: 44px;
+      height: 44px;
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 0 24px var(--green-glow);
+    }
+    .brand-title {
+      font-family: 'Outfit', sans-serif;
+      font-size: 1.7rem;
+      font-weight: 800;
+      letter-spacing: -0.5px;
+      background: linear-gradient(90deg, #ffffff, #a2b2c8);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      line-height: 1.1;
+    }
+    .brand-tagline {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      font-weight: 500;
+    }
+
+    .nav-tabs {
+      display: flex;
+      background: rgba(14, 18, 26, 0.8);
+      padding: 5px;
+      border-radius: var(--radius-md);
+      border: 1px solid var(--border);
+      gap: 4px;
+    }
+    .nav-tab {
+      background: transparent;
+      border: none;
+      color: var(--text-muted);
+      padding: 9px 18px;
+      border-radius: 10px;
+      font-family: inherit;
+      font-size: 0.88rem;
+      font-weight: 600;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      transition: all 0.25s ease;
+      position: relative;
+    }
+    .nav-tab:hover {
+      color: #fff;
+      background: rgba(255, 255, 255, 0.05);
+    }
+    .nav-tab.active {
+      color: #000;
+      background: var(--green);
+      font-weight: 700;
+      box-shadow: 0 0 16px var(--green-glow);
+    }
+    .tab-badge {
+      background: #ff4757;
+      color: #fff;
+      font-size: 0.7rem;
+      padding: 1px 6px;
+      border-radius: 10px;
+      font-weight: 700;
+    }
+
+    .header-user-section {
       display: flex;
       align-items: center;
       gap: 12px;
     }
-    .logo-icon {
-      background: var(--green);
-      color: #000;
-      padding: 10px;
-      border-radius: 50%;
+    .user-pill {
       display: flex;
       align-items: center;
-      justify-content: center;
-      box-shadow: 0 0 20px var(--green-glow);
-    }
-    .logo-area h1 {
-      font-size: 1.8rem;
-      font-weight: 800;
-      letter-spacing: -0.5px;
-      background: linear-gradient(90deg, #fff, #8b949e);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-    }
-    .logo-area p {
-      font-size: 0.9rem;
-      color: var(--text-muted);
-    }
-
-    /* Main Grid Layout */
-    .layout-grid {
-      display: grid;
-      grid-template-columns: 320px 1fr;
-      gap: 32px;
-    }
-
-    @media (max-width: 868px) {
-      .layout-grid {
-        grid-template-columns: 1fr;
-      }
-      header {
-        flex-direction: column;
-        align-items: flex-start;
-        gap: 16px;
-      }
-    }
-
-    /* Sidebar Panels */
-    .panel {
+      gap: 10px;
       background: var(--card);
-      backdrop-filter: blur(12px);
-      -webkit-backdrop-filter: blur(12px);
       border: 1px solid var(--border);
-      border-radius: 16px;
-      padding: 24px;
-      margin-bottom: 24px;
-      box-shadow: 0 8px 32px var(--shadow);
+      padding: 6px 14px 6px 8px;
+      border-radius: 30px;
+      backdrop-filter: blur(10px);
     }
-    .panel-title {
-      font-size: 1rem;
+    .user-pill-avatar {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      object-fit: cover;
+      border: 1.5px solid var(--green);
+    }
+    .user-pill-name {
+      font-size: 0.88rem;
       font-weight: 700;
-      margin-bottom: 16px;
-      display: flex;
-      align-items: center;
-      gap: 8px;
       color: #fff;
     }
-    .panel-desc {
-      font-size: 0.85rem;
-      color: var(--text-muted);
-      margin-bottom: 16px;
-    }
-
-    /* Inputs and Buttons */
-    .form-group {
-      margin-bottom: 14px;
-    }
-    .form-group label {
-      display: block;
-      font-size: 0.8rem;
-      color: var(--text-muted);
-      margin-bottom: 6px;
-      font-weight: 500;
-    }
-    .input-field {
-      width: 100%;
-      background: rgba(13, 17, 23, 0.7);
+    .status-badge-btn {
+      background: rgba(255, 255, 255, 0.05);
       border: 1px solid var(--border);
-      color: var(--text);
-      padding: 12px 14px;
-      border-radius: 8px;
-      font-size: 0.9rem;
-      transition: all 0.3s ease;
-      font-family: inherit;
-    }
-    .input-field:focus {
-      outline: none;
-      border-color: var(--green);
-      box-shadow: 0 0 10px rgba(29, 185, 84, 0.15);
-    }
-    .btn {
-      width: 100%;
-      background: var(--green);
-      color: #000;
-      font-weight: 700;
-      padding: 12px;
-      border-radius: 8px;
-      border: none;
+      color: var(--text-muted);
+      border-radius: 20px;
+      padding: 4px 10px;
+      font-size: 0.75rem;
+      font-weight: 500;
       cursor: pointer;
       display: flex;
       align-items: center;
+      gap: 6px;
+      transition: all 0.2s;
+    }
+    .status-badge-btn:hover {
+      border-color: var(--green);
+      color: #fff;
+      background: rgba(30, 215, 96, 0.1);
+    }
+    .friend-code-badge {
+      background: rgba(157, 78, 221, 0.15);
+      border: 1px solid rgba(157, 78, 221, 0.4);
+      color: #c77dff;
+      padding: 4px 10px;
+      border-radius: 20px;
+      font-size: 0.75rem;
+      font-family: monospace;
+      font-weight: 700;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      transition: all 0.2s;
+    }
+    .friend-code-badge:hover {
+      background: rgba(157, 78, 221, 0.3);
+      color: #fff;
+    }
+
+    .tab-content {
+      display: none;
+      animation: fadeIn 0.3s ease;
+    }
+    .tab-content.active {
+      display: block;
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(8px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .unauth-card {
+      background: linear-gradient(135deg, rgba(30, 215, 96, 0.15), rgba(157, 78, 221, 0.1));
+      border: 1px solid rgba(30, 215, 96, 0.3);
+      border-radius: var(--radius-lg);
+      padding: 40px;
+      text-align: center;
+      max-width: 600px;
+      margin: 40px auto;
+      box-shadow: 0 20px 50px rgba(0,0,0,0.5);
+      backdrop-filter: blur(20px);
+    }
+    .unauth-card h2 {
+      font-family: 'Outfit', sans-serif;
+      font-size: 1.8rem;
+      margin-bottom: 12px;
+      font-weight: 800;
+    }
+    .unauth-card p {
+      color: var(--text-muted);
+      margin-bottom: 24px;
+      font-size: 0.95rem;
+    }
+    .connect-form {
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      max-width: 360px;
+      margin: 0 auto;
+    }
+
+    .btn {
+      background: var(--green);
+      color: #000;
+      font-weight: 700;
+      padding: 11px 20px;
+      border-radius: var(--radius-sm);
+      border: none;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
       justify-content: center;
       gap: 8px;
       font-size: 0.9rem;
       font-family: inherit;
-      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+      text-decoration: none;
     }
     .btn:hover {
-      background: #1ed760;
+      background: #25ec6e;
       transform: translateY(-2px);
-      box-shadow: 0 5px 15px rgba(29, 185, 84, 0.3);
+      box-shadow: 0 6px 20px var(--green-glow);
     }
     .btn-secondary {
       background: rgba(255, 255, 255, 0.08);
@@ -216,57 +317,126 @@
       border-color: var(--border-hover);
       box-shadow: none;
     }
-
-    /* Copied banner inside form */
-    .link-display {
-      margin-top: 10px;
-      background: rgba(13, 17, 23, 0.9);
-      border: 1px dashed var(--border-hover);
-      padding: 10px;
+    .btn-purple {
+      background: var(--purple);
+      color: #fff;
+    }
+    .btn-purple:hover {
+      background: #b05fe8;
+      box-shadow: 0 6px 20px var(--purple-glow);
+    }
+    .btn-sm {
+      padding: 6px 12px;
+      font-size: 0.78rem;
       border-radius: 6px;
-      font-size: 0.75rem;
-      word-break: break-all;
-      color: var(--green);
-      display: none;
     }
 
-    /* Friends Grid */
+    .input-field {
+      width: 100%;
+      background: rgba(14, 18, 26, 0.85);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 11px 14px;
+      border-radius: var(--radius-sm);
+      font-size: 0.9rem;
+      transition: all 0.25s ease;
+      font-family: inherit;
+    }
+    .input-field:focus {
+      outline: none;
+      border-color: var(--green);
+      box-shadow: 0 0 12px var(--green-glow);
+    }
+
+    .feed-toolbar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 20px;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+    .search-filter-box {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex: 1;
+      max-width: 400px;
+      position: relative;
+    }
+    .search-filter-box i {
+      position: absolute;
+      left: 12px;
+      color: var(--text-muted);
+      pointer-events: none;
+    }
+    .search-filter-box input {
+      padding-left: 38px;
+    }
+    .feed-actions-right {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
     .friends-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
-      gap: 20px;
+      grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+      gap: 22px;
       align-content: start;
     }
 
-    /* Cards */
     .friend-card {
+      --album-glow: rgba(30, 215, 96, 0.15);
       background: var(--card);
-      backdrop-filter: blur(16px);
-      -webkit-backdrop-filter: blur(16px);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
       border: 1px solid var(--border);
-      border-radius: 16px;
-      padding: 20px;
+      border-radius: var(--radius-lg);
+      padding: 22px;
       display: flex;
       flex-direction: column;
       position: relative;
       transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-      box-shadow: 0 10px 30px var(--shadow);
+      box-shadow: 0 12px 36px var(--shadow);
       overflow: hidden;
+    }
+    .friend-card::before {
+      content: '';
+      position: absolute;
+      top: -50px;
+      right: -50px;
+      width: 180px;
+      height: 180px;
+      background: var(--album-glow);
+      filter: blur(60px);
+      border-radius: 50%;
+      z-index: 0;
+      opacity: 0.6;
+      transition: background 0.8s ease;
+      pointer-events: none;
     }
     .friend-card:hover {
       background: var(--card-hover);
       border-color: var(--border-hover);
       transform: translateY(-4px);
     }
+    .friend-card.active-glow {
+      border-color: rgba(30, 215, 96, 0.3);
+    }
 
-    /* Top metadata row */
+    .card-content-wrap {
+      position: relative;
+      z-index: 1;
+    }
+
     .card-top {
       display: flex;
       align-items: center;
       justify-content: space-between;
       margin-bottom: 16px;
     }
-    .user-info {
+    .user-info-area {
       display: flex;
       align-items: center;
       gap: 12px;
@@ -283,15 +453,15 @@
       height: 100%;
       border-radius: 50%;
       object-fit: cover;
-      background: #21262d;
+      background: #1a202c;
       border: 2px solid transparent;
       transition: border 0.3s ease;
     }
     .active-glow .avatar-img {
       border-color: var(--green);
-      box-shadow: 0 0 10px var(--green-glow);
+      box-shadow: 0 0 12px var(--green-glow);
     }
-    .active-indicator {
+    .live-dot {
       position: absolute;
       bottom: 0;
       right: 0;
@@ -302,98 +472,122 @@
       border: 2px solid var(--bg);
       display: none;
     }
-    .active-glow .active-indicator {
+    .active-glow .live-dot {
       display: block;
       animation: pulse-dot 1.6s infinite ease-in-out;
     }
     @keyframes pulse-dot {
-      0%, 100% { transform: scale(0.9); opacity: 0.6; }
-      50% { transform: scale(1.1); opacity: 1; }
+      0%, 100% { transform: scale(0.9); opacity: 0.7; }
+      50% { transform: scale(1.15); opacity: 1; }
     }
 
-    .user-name {
+    .user-name-title {
       font-weight: 700;
-      font-size: 0.95rem;
+      font-size: 0.98rem;
       color: #fff;
+      display: flex;
+      align-items: center;
+      gap: 6px;
     }
+    .user-custom-status {
+      font-size: 0.78rem;
+      color: var(--text-muted);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 180px;
+    }
+
     .status-badge {
       font-size: 0.7rem;
-      font-weight: 700;
-      padding: 3px 8px;
+      font-weight: 800;
+      padding: 3px 9px;
       border-radius: 20px;
       text-transform: uppercase;
-      letter-spacing: 0.5px;
+      letter-spacing: 0.6px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
     }
     .status-badge.live {
       background: var(--green-glow);
       color: var(--green);
-      border: 1px solid rgba(29, 185, 84, 0.4);
+      border: 1px solid rgba(30, 215, 96, 0.5);
     }
     .status-badge.offline {
       background: rgba(255, 255, 255, 0.05);
       color: var(--text-muted);
-      border: 1px solid rgba(255, 255, 255, 0.08);
+      border: 1px solid var(--border);
     }
 
-    .disconnect-btn {
-      background: none;
-      border: none;
-      color: var(--text-muted);
-      cursor: pointer;
-      padding: 4px;
-      border-radius: 50%;
+    .equalizer-bars {
       display: flex;
-      align-items: center;
-      justify-content: center;
-      transition: all 0.2s ease;
+      align-items: flex-end;
+      gap: 2px;
+      height: 12px;
     }
-    .disconnect-btn:hover {
-      color: #ff6b6b;
-      background: rgba(255, 107, 107, 0.1);
+    .eq-bar {
+      width: 2.5px;
+      background: var(--green);
+      border-radius: 1px;
+      animation: equalize 1s infinite ease-in-out alternate;
+    }
+    .eq-bar:nth-child(1) { height: 60%; animation-delay: 0.1s; }
+    .eq-bar:nth-child(2) { height: 100%; animation-delay: 0.3s; }
+    .eq-bar:nth-child(3) { height: 40%; animation-delay: 0.2s; }
+    .eq-bar:nth-child(4) { height: 80%; animation-delay: 0.4s; }
+    @keyframes equalize {
+      0% { height: 20%; }
+      100% { height: 100%; }
     }
 
-    /* Content Area */
-    .track-details {
+    .track-details-row {
       display: flex;
       gap: 16px;
       margin-bottom: 16px;
-      flex: 1;
+    }
+    .album-art-wrap {
+      position: relative;
+      width: 76px;
+      height: 76px;
+      border-radius: var(--radius-sm);
+      overflow: hidden;
+      flex-shrink: 0;
+      box-shadow: 0 6px 18px rgba(0, 0, 0, 0.4);
     }
     .album-art {
-      width: 72px;
-      height: 72px;
-      border-radius: 8px;
+      width: 100%;
+      height: 100%;
       object-fit: cover;
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-      background: #21262d;
-      flex-shrink: 0;
+      background: #1e2430;
       transition: transform 0.3s ease;
     }
     .friend-card:hover .album-art {
       transform: scale(1.05);
     }
-    .track-info {
+    .track-info-col {
       min-width: 0;
       display: flex;
       flex-direction: column;
       justify-content: center;
+      flex: 1;
     }
     .track-title {
-      font-weight: 600;
-      font-size: 0.95rem;
+      font-weight: 700;
+      font-size: 0.98rem;
       color: #fff;
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
-      margin-bottom: 4px;
+      margin-bottom: 3px;
       text-decoration: none;
     }
     .track-title:hover {
-      text-decoration: underline;
       color: var(--green);
+      text-decoration: underline;
     }
-    .track-artists {
-      font-size: 0.8rem;
+    .track-artist {
+      font-size: 0.84rem;
       color: var(--text-muted);
       white-space: nowrap;
       overflow: hidden;
@@ -401,25 +595,24 @@
       margin-bottom: 2px;
     }
     .track-album {
-      font-size: 0.75rem;
-      color: var(--text-muted);
-      font-style: italic;
+      font-size: 0.76rem;
+      color: var(--text-dim);
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
     }
 
-    /* Progress bar area */
     .progress-section {
       width: 100%;
+      margin-bottom: 14px;
     }
-    .progress-bar-container {
+    .progress-bar-bg {
       width: 100%;
       height: 4px;
       background: rgba(255, 255, 255, 0.1);
       border-radius: 2px;
       overflow: hidden;
-      margin-bottom: 8px;
+      margin-bottom: 6px;
     }
     .progress-bar-fill {
       height: 100%;
@@ -428,152 +621,388 @@
       border-radius: 2px;
       transition: width 1s linear;
     }
-    .progress-times {
+    .progress-time-row {
       display: flex;
       justify-content: space-between;
-      font-size: 0.75rem;
+      font-size: 0.72rem;
       color: var(--text-muted);
       font-family: monospace;
     }
 
-    /* Card Offline / Error */
-    .card-offline {
-      opacity: 0.7;
-    }
-    .card-offline .avatar-img {
-      filter: grayscale(80%);
-    }
-
-    /* Toast Notification */
-    .toast {
-      position: fixed;
-      bottom: 24px;
-      right: 24px;
-      background: #111;
-      border: 1px solid var(--border-hover);
-      padding: 14px 20px;
-      border-radius: 10px;
-      color: #fff;
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      box-shadow: 0 10px 40px rgba(0,0,0,0.5);
-      z-index: 1000;
-      transform: translateY(100px);
-      opacity: 0;
-      transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-    }
-    .toast.show {
-      transform: translateY(0);
-      opacity: 1;
-    }
-    .toast-icon {
-      color: var(--green);
-    }
-
-    /* Blank / Empty State */
-    .empty-state {
-      background: var(--card);
-      backdrop-filter: blur(12px);
-      -webkit-backdrop-filter: blur(12px);
-      border: 1px dashed var(--border);
-      border-radius: 16px;
-      padding: 60px 40px;
-      text-align: center;
-      grid-column: 1 / -1;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      gap: 16px;
-      box-shadow: inset 0 0 30px rgba(0,0,0,0.2);
-    }
-    .empty-icon {
-      color: var(--text-muted);
-      background: rgba(255, 255, 255, 0.03);
-      padding: 20px;
-      border-radius: 50%;
-      margin-bottom: 8px;
-    }
-    .empty-state h3 {
-      font-size: 1.2rem;
-      font-weight: 700;
-      color: #fff;
-    }
-    .empty-state p {
-      color: var(--text-muted);
-      font-size: 0.9rem;
-      max-width: 400px;
-    }
-
-    /* Banner for connection notifications */
-    .banner {
-      background: var(--green-glow);
-      border: 1px solid var(--green);
-      padding: 12px 18px;
-      border-radius: 12px;
-      margin-bottom: 24px;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      font-size: 0.9rem;
-      color: #fff;
-      animation: slideDown 0.4s ease;
-    }
-    @keyframes slideDown {
-      from { transform: translateY(-20px); opacity: 0; }
-      to { transform: translateY(0); opacity: 1; }
-    }
-    .banner-close {
-      background: none;
-      border: none;
-      color: #fff;
-      cursor: pointer;
-      opacity: 0.7;
-    }
-    .banner-close:hover {
-      opacity: 1;
-    }
-
-    /* Footer Section */
-    footer {
-      display: flex;
-      justify-content: center;
-      margin-top: 40px;
-      padding-top: 24px;
-      border-top: 1px solid var(--border);
-    }
-    .footer-btn {
-      background: rgba(255, 255, 255, 0.05);
-      border: 1px solid var(--border);
-      color: var(--text-muted);
-      font-weight: 600;
-      padding: 8px 16px;
-      border-radius: 20px;
-      cursor: pointer;
+    .card-actions-toolbar {
       display: flex;
       align-items: center;
       gap: 8px;
-      font-size: 0.85rem;
-      transition: all 0.3s ease;
+      margin-bottom: 12px;
+      flex-wrap: wrap;
     }
-    .footer-btn:hover {
-      background: rgba(255, 255, 255, 0.1);
+    .action-pill-btn {
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid var(--border);
+      color: var(--text);
+      border-radius: 20px;
+      padding: 5px 12px;
+      font-size: 0.78rem;
+      font-weight: 600;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.2s ease;
+      font-family: inherit;
+    }
+    .action-pill-btn:hover {
+      background: rgba(30, 215, 96, 0.15);
+      border-color: var(--green);
       color: #fff;
-      border-color: var(--border-hover);
-      transform: translateY(-1px);
+    }
+    .action-pill-btn.sync-btn {
+      background: var(--green-glow);
+      border-color: rgba(30, 215, 96, 0.4);
+      color: var(--green);
+    }
+    .action-pill-btn.sync-btn:hover {
+      background: var(--green);
+      color: #000;
     }
 
-    /* Modal Backdrop */
+    .reactions-row {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      border-top: 1px solid rgba(255, 255, 255, 0.06);
+      padding-top: 12px;
+    }
+    .reaction-btn {
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid transparent;
+      border-radius: 20px;
+      padding: 3px 8px;
+      font-size: 0.85rem;
+      cursor: pointer;
+      transition: all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    }
+    .reaction-btn:hover {
+      transform: scale(1.3);
+      background: rgba(255, 255, 255, 0.15);
+      border-color: var(--border-hover);
+    }
+
+    .floating-emoji {
+      position: absolute;
+      bottom: 20px;
+      font-size: 1.8rem;
+      pointer-events: none;
+      animation: floatUp 1.8s cubic-bezier(0.215, 0.61, 0.355, 1) forwards;
+      z-index: 100;
+    }
+    @keyframes floatUp {
+      0% { transform: translateY(0) scale(0.6); opacity: 0; }
+      20% { opacity: 1; transform: translateY(-30px) scale(1.2); }
+      80% { opacity: 0.9; }
+      100% { transform: translateY(-160px) scale(1.4); opacity: 0; }
+    }
+
+    .card-offline {
+      opacity: 0.8;
+    }
+    .card-offline .avatar-img {
+      filter: grayscale(60%);
+    }
+
+    .lounge-container {
+      display: grid;
+      grid-template-columns: 280px 1fr;
+      gap: 20px;
+      height: 680px;
+      background: var(--card);
+      backdrop-filter: blur(20px);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      overflow: hidden;
+      box-shadow: 0 16px 40px var(--shadow);
+    }
+    @media (max-width: 768px) {
+      .lounge-container {
+        grid-template-columns: 1fr;
+        height: auto;
+      }
+      .lounge-sidebar {
+        display: none;
+      }
+    }
+    .lounge-sidebar {
+      background: rgba(10, 13, 19, 0.6);
+      border-right: 1px solid var(--border);
+      padding: 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+    .sidebar-heading {
+      font-size: 0.78rem;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      color: var(--text-dim);
+    }
+    .channel-list {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .channel-btn {
+      background: transparent;
+      border: 1px solid transparent;
+      color: var(--text-muted);
+      padding: 10px 14px;
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 0.88rem;
+      font-family: inherit;
+      font-weight: 600;
+      transition: all 0.2s ease;
+      text-align: left;
+    }
+    .channel-btn:hover {
+      background: rgba(255, 255, 255, 0.05);
+      color: #fff;
+    }
+    .channel-btn.active {
+      background: rgba(30, 215, 96, 0.15);
+      border-color: rgba(30, 215, 96, 0.3);
+      color: var(--green);
+    }
+
+    .lounge-chat-area {
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+      background: rgba(14, 18, 26, 0.4);
+    }
+    .chat-header {
+      padding: 16px 20px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: rgba(10, 13, 19, 0.4);
+    }
+    .chat-channel-title {
+      font-weight: 700;
+      font-size: 1.05rem;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: #fff;
+    }
+    .chat-messages-stream {
+      flex: 1;
+      overflow-y: auto;
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+    .chat-bubble {
+      display: flex;
+      gap: 12px;
+      max-width: 85%;
+      animation: fadeIn 0.2s ease;
+    }
+    .chat-bubble.mine {
+      align-self: flex-end;
+      flex-direction: row-reverse;
+    }
+    .chat-bubble-avatar {
+      width: 34px;
+      height: 34px;
+      border-radius: 50%;
+      object-fit: cover;
+      flex-shrink: 0;
+    }
+    .chat-bubble-body {
+      background: rgba(25, 32, 44, 0.7);
+      border: 1px solid var(--border);
+      padding: 10px 14px;
+      border-radius: 14px;
+      position: relative;
+    }
+    .chat-bubble.mine .chat-bubble-body {
+      background: rgba(30, 215, 96, 0.15);
+      border-color: rgba(30, 215, 96, 0.3);
+    }
+    .chat-bubble-author {
+      font-size: 0.78rem;
+      font-weight: 700;
+      color: var(--green);
+      margin-bottom: 3px;
+    }
+    .chat-bubble-text {
+      font-size: 0.9rem;
+      color: #fff;
+      word-break: break-word;
+    }
+    .chat-bubble-time {
+      font-size: 0.68rem;
+      color: var(--text-dim);
+      margin-top: 4px;
+      text-align: right;
+    }
+
+    .chat-song-card {
+      margin-top: 8px;
+      background: rgba(10, 13, 19, 0.8);
+      border: 1px solid var(--border-hover);
+      border-radius: 10px;
+      padding: 10px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      max-width: 320px;
+    }
+    .chat-song-art {
+      width: 44px;
+      height: 44px;
+      border-radius: 6px;
+      object-fit: cover;
+    }
+    .chat-song-meta {
+      min-width: 0;
+      flex: 1;
+    }
+    .chat-song-name {
+      font-size: 0.85rem;
+      font-weight: 700;
+      color: #fff;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .chat-song-artist {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .chat-input-row {
+      padding: 16px 20px;
+      border-top: 1px solid var(--border);
+      background: rgba(10, 13, 19, 0.7);
+      display: flex;
+      gap: 10px;
+      align-items: center;
+    }
+    .typing-indicator {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      font-style: italic;
+      height: 16px;
+      padding-left: 20px;
+      margin-bottom: 4px;
+    }
+
+    .friends-view-layout {
+      display: grid;
+      grid-template-columns: 340px 1fr;
+      gap: 24px;
+    }
+    @media (max-width: 880px) {
+      .friends-view-layout {
+        grid-template-columns: 1fr;
+      }
+    }
+    .panel-card {
+      background: var(--card);
+      backdrop-filter: blur(16px);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 24px;
+      box-shadow: 0 10px 30px var(--shadow);
+    }
+    .panel-title-lg {
+      font-family: 'Outfit', sans-serif;
+      font-size: 1.15rem;
+      font-weight: 700;
+      margin-bottom: 14px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      color: #fff;
+    }
+    .friend-request-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 14px;
+      background: rgba(14, 18, 26, 0.7);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      margin-bottom: 10px;
+    }
+
+    .taste-match-hero {
+      background: linear-gradient(135deg, rgba(157, 78, 221, 0.15), rgba(30, 215, 96, 0.1));
+      border: 1px solid rgba(157, 78, 221, 0.3);
+      border-radius: var(--radius-lg);
+      padding: 36px;
+      text-align: center;
+      margin-bottom: 28px;
+    }
+    .match-score-circle {
+      width: 120px;
+      height: 120px;
+      border-radius: 50%;
+      background: conic-gradient(var(--green) var(--pct, 80%), rgba(255,255,255,0.1) 0);
+      margin: 0 auto 16px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 0 30px var(--green-glow);
+    }
+    .match-score-inner {
+      width: 96px;
+      height: 96px;
+      border-radius: 50%;
+      background: var(--bg);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: 'Outfit', sans-serif;
+      font-size: 1.8rem;
+      font-weight: 800;
+      color: #fff;
+    }
+    .taste-tags-wrap {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      justify-content: center;
+      margin-top: 14px;
+    }
+    .taste-tag {
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid var(--border);
+      padding: 5px 12px;
+      border-radius: 20px;
+      font-size: 0.8rem;
+      font-weight: 600;
+      color: #fff;
+    }
+
     .modal-backdrop {
       position: fixed;
       top: 0;
       left: 0;
       width: 100%;
       height: 100%;
-      background: rgba(0, 0, 0, 0.75);
-      backdrop-filter: blur(8px);
-      -webkit-backdrop-filter: blur(8px);
+      background: rgba(0, 0, 0, 0.78);
+      backdrop-filter: blur(10px);
       display: none;
       align-items: center;
       justify-content: center;
@@ -585,16 +1014,14 @@
       opacity: 1;
     }
     .modal-content {
-      background: rgba(22, 27, 34, 0.85);
-      backdrop-filter: blur(20px);
-      -webkit-backdrop-filter: blur(20px);
+      background: rgba(18, 23, 33, 0.95);
       border: 1px solid var(--border-hover);
-      border-radius: 16px;
+      border-radius: var(--radius-lg);
       width: 90%;
-      max-width: 400px;
-      padding: 24px;
+      max-width: 440px;
+      padding: 28px;
       position: relative;
-      box-shadow: 0 20px 50px rgba(0,0,0,0.6);
+      box-shadow: 0 24px 60px rgba(0, 0, 0, 0.8);
       transform: translateY(20px);
       transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
     }
@@ -603,421 +1030,544 @@
     }
     .modal-close {
       position: absolute;
-      top: 16px;
-      right: 16px;
+      top: 18px;
+      right: 18px;
       background: none;
       border: none;
       color: var(--text-muted);
       cursor: pointer;
-      padding: 4px;
-      display: flex;
     }
-    .modal-close:hover {
+    .modal-close:hover { color: #fff; }
+
+    .toast {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      background: rgba(18, 23, 33, 0.95);
+      border: 1px solid var(--green);
+      padding: 14px 20px;
+      border-radius: var(--radius-sm);
       color: #fff;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      box-shadow: 0 12px 40px rgba(0,0,0,0.6);
+      z-index: 2000;
+      transform: translateY(100px);
+      opacity: 0;
+      transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    }
+    .toast.show {
+      transform: translateY(0);
+      opacity: 1;
+    }
+
+    .empty-state {
+      background: var(--card);
+      border: 1px dashed var(--border);
+      border-radius: var(--radius-lg);
+      padding: 50px 30px;
+      text-align: center;
+      grid-column: 1 / -1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 14px;
     }
   </style>
 </head>
 <body>
-  <!-- Mesh gradients -->
   <div class="blob blob-1"></div>
   <div class="blob blob-2"></div>
 
-  <div class="container">
+  <div class="app-container">
     <header>
-      <div class="logo-area">
-        <div class="logo-icon">
-          <i data-lucide="music-4" style="width: 28px; height: 28px;"></i>
+      <div class="brand-section">
+        <div class="brand-logo">
+          <i data-lucide="radio" style="width: 24px; height: 24px;"></i>
         </div>
         <div>
-          <h1 style="font-weight: 800; letter-spacing: -0.03em;">Sharify</h1>
-          <p>Real-time playback feed for your group</p>
+          <h1 class="brand-title">Sharify</h1>
+          <p class="brand-tagline">Real-time social music hub & sync</p>
         </div>
       </div>
+
+      <nav class="nav-tabs" id="mainNavTabs">
+        <button class="nav-tab active" onclick="switchTab('feed')">
+          <i data-lucide="headphones" style="width: 16px; height: 16px;"></i>
+          <span>Live Feed</span>
+        </button>
+        <button class="nav-tab" onclick="switchTab('lounge')">
+          <i data-lucide="message-square" style="width: 16px; height: 16px;"></i>
+          <span>Music Lounge</span>
+          <span id="unreadChatBadge" class="tab-badge" style="display: none;">0</span>
+        </button>
+        <button class="nav-tab" onclick="switchTab('friends')">
+          <i data-lucide="users" style="width: 16px; height: 16px;"></i>
+          <span>Friends</span>
+          <span id="requestsBadge" class="tab-badge" style="display: none;">0</span>
+        </button>
+        <button class="nav-tab" onclick="switchTab('blend')">
+          <i data-lucide="sparkles" style="width: 16px; height: 16px;"></i>
+          <span>Match & Blend</span>
+        </button>
+      </nav>
+
+      <div class="header-user-section" id="headerUserSection"></div>
     </header>
 
-    <div id="banner-placeholder"></div>
-
-    <div class="layout-grid">
-      <!-- Left sidebar actions -->
-      <aside>
-        <div id="addYourselfPanel" class="panel">
-          <div class="panel-title">
-            <i data-lucide="user-plus" style="width: 18px; height: 18px; color: var(--green);"></i>
-            <span>Add Yourself</span>
-          </div>
-          <p class="panel-desc">Enter your display name to start tracking your Spotify playback on this dashboard.</p>
-          <div class="form-group">
-            <label for="nameInput">DISPLAY NAME</label>
-            <input id="nameInput" class="input-field" placeholder="e.g. Sid" />
-          </div>
-          <button class="btn" onclick="connectSelf()">
-            <i data-lucide="log-in" style="width: 18px; height: 18px;"></i>
-            <span>Connect Spotify</span>
+    <!-- TAB 1: Live Friend Feed -->
+    <section id="tab-feed" class="tab-content active">
+      <div class="feed-toolbar">
+        <div class="search-filter-box">
+          <i data-lucide="search" style="width: 16px; height: 16px;"></i>
+          <input id="feedSearchInput" class="input-field" placeholder="Filter by track, artist, or friend..." oninput="filterFeed()" />
+        </div>
+        <div class="feed-actions-right">
+          <button class="action-pill-btn" onclick="toggleFeedFilter('playing')" id="filterPlayingBtn">
+            <i data-lucide="flame" style="width: 14px; height: 14px;"></i>
+            <span>Live Only</span>
+          </button>
+          <button class="action-pill-btn" onclick="openInviteModal()">
+            <i data-lucide="user-plus" style="width: 14px; height: 14px;"></i>
+            <span>Invite Friend</span>
           </button>
         </div>
-      </aside>
+      </div>
 
-      <!-- Main Activity Feed -->
-      <main>
-        <div id="friendsList" class="friends-grid">
-          <!-- Card loading state (briefly) -->
-          <div style="grid-column: 1 / -1; text-align: center; color: var(--text-muted); padding: 40px;">
-            <i data-lucide="loader-2" class="spin" style="width: 32px; height: 32px; margin-bottom: 8px;"></i>
-            <p>Loading activity feed...</p>
+      <div id="feedList" class="friends-grid"></div>
+    </section>
+
+    <!-- TAB 2: Music Lounge & Real-time Chat -->
+    <section id="tab-lounge" class="tab-content">
+      <div class="lounge-container">
+        <div class="lounge-sidebar">
+          <div class="sidebar-heading">Rooms & Friends</div>
+          <div class="channel-list" id="channelList">
+            <button class="channel-btn active" onclick="switchRoom('group')">
+              <i data-lucide="globe" style="width: 16px; height: 16px; color: var(--green);"></i>
+              <span># Group Lounge</span>
+            </button>
           </div>
         </div>
-      </main>
-    </div>
 
-    <!-- Footer Section -->
-    <footer>
-      <button class="footer-btn" onclick="openInviteModal()">
-        <i data-lucide="share-2" style="width: 16px; height: 16px;"></i>
-        <span>Invite Friends</span>
-      </button>
-    </footer>
+        <div class="lounge-chat-area">
+          <div class="chat-header">
+            <div class="chat-channel-title">
+              <i data-lucide="message-circle" style="width: 18px; height: 18px; color: var(--green);"></i>
+              <span id="activeRoomTitle"># Group Lounge</span>
+            </div>
+            <button class="action-pill-btn" onclick="shareMyCurrentTrackToChat()">
+              <i data-lucide="disc-3" style="width: 14px; height: 14px; color: var(--green);"></i>
+              <span>Share My Playing Track</span>
+            </button>
+          </div>
+
+          <div class="chat-messages-stream" id="chatMessagesStream"></div>
+
+          <div class="typing-indicator" id="typingIndicator"></div>
+
+          <form class="chat-input-row" onsubmit="handleSendChat(event)">
+            <input id="chatInput" class="input-field" placeholder="Send a message or vibe check... (Press Enter)" autocomplete="off" oninput="handleTypingEvent()" />
+            <button type="submit" class="btn btn-sm">
+              <i data-lucide="send" style="width: 16px; height: 16px;"></i>
+            </button>
+          </form>
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 3: Friends & Requests Network -->
+    <section id="tab-friends" class="tab-content">
+      <div class="friends-view-layout">
+        <div style="display: flex; flex-direction: column; gap: 20px;">
+          <div class="panel-card">
+            <div class="panel-title-lg">
+              <i data-lucide="qr-code" style="width: 20px; height: 20px; color: var(--purple);"></i>
+              <span>Your Friend Code</span>
+            </div>
+            <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 16px;">Share your unique code or QR with friends so they can add you to their private feed.</p>
+            <div style="display: flex; gap: 10px; margin-bottom: 14px;">
+              <input id="myFriendCodeDisplay" class="input-field" readonly style="font-family: monospace; font-weight: 700; text-align: center; font-size: 1.1rem; color: #c77dff;" />
+              <button class="btn btn-secondary" onclick="copyMyFriendCode()" title="Copy Code">
+                <i data-lucide="copy" style="width: 16px; height: 16px;"></i>
+              </button>
+            </div>
+            <button class="btn btn-purple" style="width: 100%;" onclick="openInviteModal()">
+              <i data-lucide="share-2" style="width: 16px; height: 16px;"></i>
+              <span>Show QR Code & Invite Link</span>
+            </button>
+          </div>
+
+          <div class="panel-card">
+            <div class="panel-title-lg">
+              <i data-lucide="user-plus" style="width: 20px; height: 20px; color: var(--green);"></i>
+              <span>Add a Friend</span>
+            </div>
+            <div style="display: flex; gap: 8px; margin-bottom: 14px;">
+              <input id="friendSearchQuery" class="input-field" placeholder="Enter Friend Code (e.g. SHAR-1234) or Name" />
+              <button class="btn btn-sm" onclick="searchForFriends()">
+                <i data-lucide="search" style="width: 16px; height: 16px;"></i>
+              </button>
+            </div>
+            <div id="searchResultsArea" style="display: flex; flex-direction: column; gap: 8px;"></div>
+          </div>
+        </div>
+
+        <div style="display: flex; flex-direction: column; gap: 20px;">
+          <div class="panel-card" id="pendingRequestsPanel">
+            <div class="panel-title-lg">
+              <i data-lucide="bell" style="width: 20px; height: 20px; color: #ff6b6b;"></i>
+              <span>Incoming Friend Requests</span>
+            </div>
+            <div id="pendingRequestsList">
+              <p style="color: var(--text-muted); font-size: 0.88rem;">No pending friend requests.</p>
+            </div>
+          </div>
+
+          <div class="panel-card">
+            <div class="panel-title-lg">
+              <i data-lucide="users" style="width: 20px; height: 20px; color: var(--green);"></i>
+              <span>My Friends Network</span>
+            </div>
+            <div id="myConfirmedFriendsList" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 14px;"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 4: Taste Match & Spotify Blend -->
+    <section id="tab-blend" class="tab-content">
+      <div class="taste-match-hero">
+        <h2 style="font-family: 'Outfit', sans-serif; font-size: 1.8rem; margin-bottom: 8px;">Musical Compatibility & Group Blend</h2>
+        <p style="color: var(--text-muted); max-width: 500px; margin: 0 auto 24px; font-size: 0.95rem;">Select any friend to compare top genres, compute your Music Match score, or generate a shared Spotify Blend playlist.</p>
+        
+        <div style="max-width: 320px; margin: 0 auto 24px;">
+          <label style="font-size: 0.8rem; color: var(--text-muted); display: block; margin-bottom: 6px;">COMPARE WITH FRIEND</label>
+          <select id="tasteMatchFriendSelect" class="input-field" onchange="runTasteMatch()">
+            <option value="">Select a friend...</option>
+          </select>
+        </div>
+
+        <div id="tasteMatchResultArea" style="display: none;">
+          <div class="match-score-circle" id="matchScoreCircle">
+            <div class="match-score-inner" id="matchScoreValue">85%</div>
+          </div>
+          <h3 id="tasteMatchSubtitle" style="font-weight: 700; margin-bottom: 12px;"></h3>
+          
+          <div style="margin-bottom: 24px;">
+            <div style="font-size: 0.82rem; color: var(--text-muted); margin-bottom: 8px;">SHARED FAVORITE ARTISTS & GENRES</div>
+            <div class="taste-tags-wrap" id="sharedTasteTags"></div>
+          </div>
+
+          <button class="btn btn-purple" id="createBlendBtn" onclick="createSpotifyBlend()">
+            <i data-lucide="disc" style="width: 18px; height: 18px;"></i>
+            <span>Generate Spotify Blend Playlist</span>
+          </button>
+        </div>
+      </div>
+    </section>
   </div>
 
-  <!-- Modal for Inviting Friends -->
+  <audio id="audioPreviewPlayer" style="display: none;"></audio>
+
+  <!-- Modal: Invite Friends with QR Code -->
   <div id="inviteModal" class="modal-backdrop" onclick="if(event.target === this) closeInviteModal()">
     <div class="modal-content">
-      <button class="modal-close" onclick="closeInviteModal()" title="Close">
-        <i data-lucide="x" style="width: 20px; height: 20px;"></i>
-      </button>
-      <div class="panel-title" style="margin-bottom: 8px;">
-        <i data-lucide="share-2" style="width: 18px; height: 18px; color: var(--green);"></i>
+      <button class="modal-close" onclick="closeInviteModal()"><i data-lucide="x"></i></button>
+      <div class="panel-title-lg" style="margin-bottom: 6px;">
+        <i data-lucide="share-2" style="color: var(--green);"></i>
         <span>Invite Friends</span>
       </div>
-      <p class="panel-desc" style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 16px;">Generate an invite link tailored for a friend and send it to them so they can join.</p>
-      <div class="form-group" style="margin-bottom: 14px;">
-        <label for="friendNameInput" style="display: block; font-size: 0.8rem; color: var(--text-muted); margin-bottom: 6px; font-weight: 500;">FRIEND'S NAME</label>
-        <input id="friendNameInput" class="input-field" placeholder="e.g. Jane" />
+      <p style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 18px;">Friends can scan this QR code or use the link to connect their Spotify account and be added to your circle.</p>
+      
+      <div id="qrcodeContainer" style="display: flex; justify-content: center; background: #fff; padding: 14px; border-radius: 12px; max-width: 200px; margin: 0 auto 16px;"></div>
+
+      <div style="display: flex; gap: 8px; margin-bottom: 10px;">
+        <input id="inviteModalLink" class="input-field" readonly style="font-size: 0.8rem;" />
+        <button class="btn btn-sm" onclick="copyInviteModalLink()">
+          <i data-lucide="copy" style="width: 14px; height: 14px;"></i>
+        </button>
       </div>
-      <button class="btn" onclick="generateInviteLink()">
-        <i data-lucide="copy" style="width: 18px; height: 18px;"></i>
-        <span>Copy Invite Link</span>
-      </button>
-      <div id="inviteLinkDisplay" class="link-display"></div>
     </div>
   </div>
 
-  <!-- Toast Container -->
+  <!-- Modal: Edit Status / Mood -->
+  <div id="statusModal" class="modal-backdrop" onclick="if(event.target === this) closeStatusModal()">
+    <div class="modal-content">
+      <button class="modal-close" onclick="closeStatusModal()"><i data-lucide="x"></i></button>
+      <div class="panel-title-lg">
+        <i data-lucide="smile" style="color: var(--green);"></i>
+        <span>Set Status / Mood</span>
+      </div>
+      <div style="display: flex; gap: 10px; margin-bottom: 14px;">
+        <input id="statusEmojiInput" class="input-field" style="width: 60px; text-align: center; font-size: 1.2rem;" value="🎧" maxlength="2" />
+        <input id="statusTextInput" class="input-field" placeholder="What are you up to? (e.g. Late night drive)" maxlength="60" />
+      </div>
+      <button class="btn" style="width: 100%;" onclick="saveCustomStatus()">Save Status</button>
+    </div>
+  </div>
+
   <div id="toast" class="toast">
-    <i data-lucide="check-circle" class="toast-icon" style="width: 20px; height: 20px;"></i>
-    <span id="toast-message">Action successful!</span>
+    <i data-lucide="check-circle" style="color: var(--green);"></i>
+    <span id="toast-message">Success!</span>
   </div>
 
   <script>
-    // Global state representing friends and their playback statuses
-    let friendsState = [];
+    let currentUser = null;
+    let feedData = [];
+    let activeRoom = 'group';
+    let filterLiveOnly = false;
     let progressTimer = null;
+    let currentPreviewAudioUrl = null;
+    let typingTimer = null;
 
-    // Check for success banner from redirect
-    const params = new URLSearchParams(location.search);
-    const connectedName = params.get('connected');
-    if (connectedName) {
-      localStorage.setItem('connectedUser', connectedName);
-      updateLayout();
-      document.getElementById('banner-placeholder').innerHTML = `
-        <div class="banner">
-          <div style="display: flex; align-items: center; gap: 8px;">
-            <i data-lucide="check-circle-2" style="width: 20px; height: 20px; color: var(--green);"></i>
-            <span>Successfully connected <strong>${escapeHTML(connectedName)}</strong>!</span>
-          </div>
-          <button class="banner-close" onclick="closeBanner()">
-            <i data-lucide="x" style="width: 16px; height: 16px;"></i>
-          </button>
-        </div>
-      `;
-      // Clean query parameters from URL without reloading
+    // Check for success banner parameter
+    const urlParams = new URLSearchParams(window.location.search);
+    const connectedParam = urlParams.get('connected');
+    if (connectedParam) {
+      setTimeout(() => showToast(`Successfully connected Spotify as ${connectedParam}!`), 500);
       window.history.replaceState({}, document.title, window.location.pathname);
     }
 
-    // Hide Add Yourself panel and collapse layout if the user is already connected
-    function updateLayout() {
-      const connectedUser = localStorage.getItem('connectedUser');
-      const addPanel = document.getElementById('addYourselfPanel');
-      const aside = document.querySelector('aside');
-      const grid = document.querySelector('.layout-grid');
-      
-      if (connectedUser) {
-        if (addPanel) addPanel.style.display = 'none';
-        if (aside) aside.style.display = 'none';
-        if (grid) grid.style.gridTemplateColumns = '1fr';
+    // Socket.io initialization with Safari polling fallback
+    const socket = io({
+      transports: ['polling', 'websocket'],
+      reconnectionAttempts: 5,
+    });
+
+    socket.on('connect', () => {
+      console.log('⚡ Connected to Sharify Realtime Engine');
+      socket.emit('join_room', activeRoom);
+    });
+
+    socket.on('new_message', (msg) => {
+      if (msg.roomId === activeRoom) {
+        appendChatMessage(msg);
       } else {
-        if (addPanel) addPanel.style.display = 'block';
-        if (aside) aside.style.display = 'block';
-        if (grid) grid.style.gridTemplateColumns = '320px 1fr';
+        const badge = document.getElementById('unreadChatBadge');
+        if (badge) {
+          const current = parseInt(badge.textContent || '0') + 1;
+          badge.textContent = current;
+          badge.style.display = 'inline-block';
+        }
+      }
+    });
+
+    socket.on('user_typing', ({ senderName, isTyping }) => {
+      const el = document.getElementById('typingIndicator');
+      if (el) {
+        el.textContent = isTyping ? `${senderName} is typing...` : '';
+      }
+    });
+
+    socket.on('floating_reaction', ({ targetSpotifyId, emoji, fromName }) => {
+      triggerFloatingReaction(targetSpotifyId, emoji);
+    });
+
+    socket.on('friend_request', (data) => {
+      showToast(`New friend request from ${data.fromName}!`);
+      loadUserProfile();
+    });
+
+    function switchTab(tabId) {
+      document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+      document.querySelectorAll('.nav-tab').forEach(b => b.classList.remove('active'));
+
+      const target = document.getElementById(`tab-${tabId}`);
+      if (target) target.classList.add('active');
+
+      const tabs = Array.from(document.querySelectorAll('.nav-tab'));
+      const activeIdx = ['feed', 'lounge', 'friends', 'blend'].indexOf(tabId);
+      if (tabs[activeIdx]) tabs[activeIdx].classList.add('active');
+
+      if (tabId === 'lounge') {
+        const badge = document.getElementById('unreadChatBadge');
+        if (badge) badge.style.display = 'none';
+        loadChatMessages();
+      } else if (tabId === 'friends') {
+        loadUserProfile();
+      } else if (tabId === 'blend') {
+        populateTasteFriendsDropdown();
+      }
+
+      if (window.lucide) lucide.createIcons();
+    }
+
+    async function loadUserProfile() {
+      try {
+        const res = await fetch('/api/me', { credentials: 'same-origin' });
+        if (res.status === 401) {
+          currentUser = null;
+          renderHeaderUnauth();
+          renderFeedUnauth();
+          return;
+        }
+        currentUser = await res.json();
+        renderHeaderUser();
+        updateFriendsView();
+        populateTasteFriendsDropdown();
+      } catch (err) {
+        console.error('Error fetching current user:', err);
       }
     }
 
-    function closeBanner() {
-      const banner = document.querySelector('.banner');
-      if (banner) banner.remove();
+    function renderHeaderUser() {
+      const section = document.getElementById('headerUserSection');
+      if (!currentUser) return;
+
+      const avatar = currentUser.avatarUrl || 'https://www.gravatar.com/avatar/00000000000000000000000000000000?d=mp&f=y';
+      const statusText = currentUser.statusMessage ? `${currentUser.statusEmoji || '🎧'} ${currentUser.statusMessage}` : 'Set Mood';
+
+      section.innerHTML = `
+        <div class="friend-code-badge" onclick="copyMyFriendCode()" title="Click to copy Friend Code">
+          <i data-lucide="tag" style="width: 12px; height: 12px;"></i>
+          <span>${currentUser.friendCode}</span>
+        </div>
+        <button class="status-badge-btn" onclick="openStatusModal()">
+          <span>${escapeHTML(statusText)}</span>
+        </button>
+        <div class="user-pill">
+          <img class="user-pill-avatar" src="${avatar}" alt="${currentUser.name}" />
+          <span class="user-pill-name">${escapeHTML(currentUser.name)}</span>
+        </div>
+      `;
+
+      const codeDisplay = document.getElementById('myFriendCodeDisplay');
+      if (codeDisplay) codeDisplay.value = currentUser.friendCode;
+
+      const reqBadge = document.getElementById('requestsBadge');
+      if (reqBadge && currentUser.friendRequestsReceived?.length) {
+        reqBadge.textContent = currentUser.friendRequestsReceived.length;
+        reqBadge.style.display = 'inline-block';
+      }
+
+      if (window.lucide) lucide.createIcons();
     }
 
-    // Connect user
-    function connectSelf() {
-      const nameInput = document.getElementById('nameInput');
-      const name = nameInput.value.trim();
+    function renderHeaderUnauth() {
+      const section = document.getElementById('headerUserSection');
+      section.innerHTML = `
+        <button class="btn btn-sm" onclick="openConnectDialog()">
+          <i data-lucide="log-in" style="width: 14px; height: 14px;"></i>
+          <span>Connect Spotify</span>
+        </button>
+      `;
+      if (window.lucide) lucide.createIcons();
+    }
+
+    function openConnectDialog() {
+      const name = prompt('Enter your name to connect Spotify:');
+      if (name && name.trim()) {
+        window.location.href = `/login?name=${encodeURIComponent(name.trim())}`;
+      }
+    }
+
+    function renderFeedUnauth() {
+      const container = document.getElementById('feedList');
+      container.innerHTML = `
+        <div class="unauth-card">
+          <h2>Welcome to Sharify</h2>
+          <p>See live friend activity, sync and listen along to tracks in real-time, and vibe together.</p>
+          <div class="connect-form">
+            <input id="unauthNameInput" class="input-field" placeholder="Enter your display name (e.g. Sid)" />
+            <button class="btn" onclick="connectFromFeedCard()">
+              <i data-lucide="log-in"></i>
+              <span>Connect Spotify</span>
+            </button>
+          </div>
+        </div>
+      `;
+      if (window.lucide) lucide.createIcons();
+    }
+
+    function connectFromFeedCard() {
+      const input = document.getElementById('unauthNameInput');
+      const name = input?.value?.trim();
       if (!name) {
-        showToast('Please enter a display name first.');
-        nameInput.focus();
+        showToast('Please enter your name.');
         return;
       }
       window.location.href = `/login?name=${encodeURIComponent(name)}`;
     }
 
-    // Generate friend's invite link
-    function generateInviteLink() {
-      const friendNameInput = document.getElementById('friendNameInput');
-      const name = friendNameInput.value.trim();
-      if (!name) {
-        showToast("Please enter your friend's name first.");
-        friendNameInput.focus();
-        return;
-      }
-      
-      const origin = window.location.origin;
-      const inviteUrl = `${origin}/login?name=${encodeURIComponent(name)}`;
-      
-      // Copy to clipboard
-      navigator.clipboard.writeText(inviteUrl).then(() => {
-        const linkDisplay = document.getElementById('inviteLinkDisplay');
-        linkDisplay.textContent = inviteUrl;
-        linkDisplay.style.display = 'block';
-        showToast(`Invite link copied for ${name}!`);
-        friendNameInput.value = '';
-        // Automatically close modal after 1.5 seconds so they see the result
-        setTimeout(closeInviteModal, 1500);
-      }).catch(err => {
-        showToast('Could not auto-copy. Link: ' + inviteUrl);
-      });
-    }
-
-    // Modal Control Functions
-    function openInviteModal() {
-      const modal = document.getElementById('inviteModal');
-      if (modal) {
-        document.getElementById('friendNameInput').value = '';
-        document.getElementById('inviteLinkDisplay').style.display = 'none';
-        modal.style.display = 'flex';
-        setTimeout(() => modal.classList.add('show'), 10);
-      }
-    }
-
-    function closeInviteModal() {
-      const modal = document.getElementById('inviteModal');
-      if (modal) {
-        modal.classList.remove('show');
-        setTimeout(() => modal.style.display = 'none', 300);
-      }
-    }
-
-    // Delete a friend connection (Secured for Super Admin)
-    async function disconnectFriend(spotifyId, friendName) {
-      if (!confirm(`Are you sure you want to disconnect ${friendName} from the dashboard?`)) {
-        return;
-      }
-
-      let adminKey = localStorage.getItem('adminKey');
-      if (!adminKey) {
-        adminKey = prompt('Please enter the Admin Key to confirm this action:');
-        if (!adminKey) return;
-      }
-
+    async function fetchFeed() {
       try {
-        const res = await fetch(`/api/friends/${spotifyId}`, {
-          method: 'DELETE',
-          headers: {
-            'x-admin-key': adminKey
-          }
-        });
-        if (res.ok) {
-          localStorage.setItem('adminKey', adminKey); // Cache it on success
-          showToast(`Disconnected ${friendName}.`);
-          
-          // If they disconnected themselves, clean localStorage and expand layout again
-          const connectedUser = localStorage.getItem('connectedUser');
-          if (connectedUser && friendName.toLowerCase() === connectedUser.toLowerCase()) {
-            localStorage.removeItem('connectedUser');
-            localStorage.removeItem('adminKey');
-            updateLayout();
-          }
-
-          refresh();
-        } else if (res.status === 403) {
-          localStorage.removeItem('adminKey'); // Clear invalid cache key
-          showToast('Incorrect Admin Key. Action denied.');
-        } else {
-          showToast(`Failed to disconnect.`);
-        }
-      } catch (err) {
-        console.error(err);
-        showToast(`Error trying to disconnect.`);
-      }
-    }
-
-    // Convert milliseconds to mm:ss clock format
-    function msToClock(ms) {
-      if (ms < 0) ms = 0;
-      const totalSeconds = Math.floor(ms / 1000);
-      const minutes = Math.floor(totalSeconds / 60);
-      const seconds = totalSeconds % 60;
-      return `${minutes}:${String(seconds).padStart(2, '0')}`;
-    }
-
-    // Calculate relative time since a date
-    function timeAgo(dateString) {
-      if (!dateString) return '';
-      const date = new Date(dateString);
-      const now = new Date();
-      const seconds = Math.floor((now - date) / 1000);
-      
-      if (seconds < 5) return 'Just now';
-      if (seconds < 60) return `${seconds}s ago`;
-      
-      const minutes = Math.floor(seconds / 60);
-      if (minutes < 60) return `${minutes}m ago`;
-      
-      const hours = Math.floor(minutes / 60);
-      if (hours < 24) return `${hours}h ago`;
-      
-      const days = Math.floor(hours / 24);
-      if (days === 1) return 'Yesterday';
-      return `${days}d ago`;
-    }
-
-    // Show a toast message
-    function showToast(message) {
-      const toast = document.getElementById('toast');
-      const toastMessage = document.getElementById('toast-message');
-      toastMessage.textContent = message;
-      toast.classList.add('show');
-      
-      setTimeout(() => {
-        toast.classList.remove('show');
-      }, 4000);
-    }
-
-    // Safe HTML Escaper
-    function escapeHTML(str) {
-      if (!str) return '';
-      return str.replace(/[&<>'"]/g, 
-        tag => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[tag] || tag)
-      );
-    }
-
-    // Poll backend for fresh data
-    async function refresh() {
-      try {
-        const res = await fetch('/api/friends');
-        if (!res.ok) throw new Error('Failed to fetch');
-        const friends = await res.json();
+        const res = await fetch('/api/feed', { credentials: 'same-origin' });
+        if (!res.ok) throw new Error('Failed to fetch feed');
+        const data = await res.json();
         
-        // Calculate dynamic server-client time offset for accuracy
         const now = Date.now();
-        
-        friendsState = friends.map(f => {
+        feedData = data.map(f => {
           if (f.playing && f.progressMs !== undefined) {
-            // Account for any latency/offset since the server sent it
             const latency = now - (f.timestamp || now);
             f.progressMs = Math.min(f.durationMs || 0, f.progressMs + latency);
           }
           return f;
         });
 
-        // Self-healing session check: if they have a local connection name, 
-        // but that name is not in the active friends list, clear their local session!
-        const connectedUser = localStorage.getItem('connectedUser');
-        if (connectedUser) {
-          const userExists = friendsState.some(f => f.name.toLowerCase() === connectedUser.toLowerCase());
-          if (!userExists) {
-            localStorage.removeItem('connectedUser');
-            localStorage.removeItem('adminKey');
-            updateLayout();
-          }
-        }
-
-        render();
+        renderFeed();
       } catch (err) {
-        console.error('Error fetching friends list:', err);
-        document.getElementById('friendsList').innerHTML = `
-          <div class="empty-state" style="border-color: #ff6b6b; background: rgba(255,107,107,0.03);">
-            <div class="empty-icon" style="color: #ff6b6b;"><i data-lucide="alert-triangle"></i></div>
-            <h3>Could not load feed</h3>
-            <p>Make sure the backend server is running and .env configuration is set up properly.</p>
-          </div>
-        `;
-        lucide.createIcons();
+        console.error('Feed error:', err);
       }
     }
 
-    // Render cards using stored local state
-    function render() {
-      const container = document.getElementById('friendsList');
-      if (!friendsState.length) {
+    function filterFeed() {
+      renderFeed();
+    }
+
+    function toggleFeedFilter(type) {
+      if (type === 'playing') {
+        filterLiveOnly = !filterLiveOnly;
+        const btn = document.getElementById('filterPlayingBtn');
+        if (btn) {
+          btn.style.background = filterLiveOnly ? 'var(--green-glow)' : '';
+          btn.style.borderColor = filterLiveOnly ? 'var(--green)' : '';
+          btn.style.color = filterLiveOnly ? '#fff' : '';
+        }
+      }
+      renderFeed();
+    }
+
+    function renderFeed() {
+      if (!currentUser) return;
+      const container = document.getElementById('feedList');
+      const query = (document.getElementById('feedSearchInput')?.value || '').toLowerCase().trim();
+
+      let filtered = feedData;
+      if (filterLiveOnly) {
+        filtered = filtered.filter(f => f.playing);
+      }
+      if (query) {
+        filtered = filtered.filter(f => 
+          (f.name && f.name.toLowerCase().includes(query)) ||
+          (f.track && f.track.toLowerCase().includes(query)) ||
+          (f.artists && f.artists.toLowerCase().includes(query))
+        );
+      }
+
+      if (!filtered.length) {
         container.innerHTML = `
           <div class="empty-state">
-            <div class="empty-icon"><i data-lucide="users" style="width: 32px; height: 32px;"></i></div>
-            <h3>No friends connected yet</h3>
-            <p>Connect your Spotify account, or generate an invite link for a friend in the sidebar to populate this dashboard.</p>
+            <i data-lucide="headphones" style="width: 40px; height: 40px; color: var(--text-muted);"></i>
+            <h3>No activity found</h3>
+            <p style="color: var(--text-muted); font-size: 0.9rem;">Invite friends using your Friend Code or QR code to expand your feed!</p>
+            <button class="btn btn-sm btn-purple" onclick="openInviteModal()">
+              <i data-lucide="share-2" style="width: 14px; height: 14px;"></i>
+              <span>Invite Friends</span>
+            </button>
           </div>
         `;
-        lucide.createIcons();
+        if (window.lucide) lucide.createIcons();
         return;
       }
 
-      const connectedUser = localStorage.getItem('connectedUser');
-      const isAdmin = connectedUser && connectedUser.toLowerCase().includes('siddharth');
-
-      container.innerHTML = friendsState.map(friend => {
-        const isMe = connectedUser && friend.name.toLowerCase() === connectedUser.toLowerCase();
+      container.innerHTML = filtered.map(friend => {
+        const isMe = friend.spotifyId === currentUser.spotifyId;
         const name = escapeHTML(friend.name) + (isMe ? ' (You)' : '');
-        const spotifyId = friend.spotifyId;
         const avatar = friend.avatarUrl || 'https://www.gravatar.com/avatar/00000000000000000000000000000000?d=mp&f=y';
-        
-        // Safely escape single quotes for inline JS attributes
-        const escapedFriendName = friend.name.replace(/'/g, "\\'");
+        const customStatus = friend.statusMessage ? `${friend.statusEmoji || '🎧'} ${escapeHTML(friend.statusMessage)}` : '';
 
-        // Disconnect controls, rendered only for Super Admin (Siddharth)
-        const deleteButtonHtml = isAdmin ? `
-          <button class="disconnect-btn" onclick="disconnectFriend('${spotifyId}', '${escapedFriendName}')" title="Disconnect Account">
-            <i data-lucide="x" style="width: 16px; height: 16px;"></i>
-          </button>
-        ` : '';
-
-        const deleteButtonErrorHtml = isAdmin ? `
-          <button class="disconnect-btn" onclick="disconnectFriend('${spotifyId}', '${escapedFriendName}')" title="Disconnect Account">
-            <i data-lucide="user-minus" style="width: 16px; height: 16px;"></i>
-          </button>
-        ` : '';
-
-        // Error state
-        if (friend.error) {
-          return `
-            <div class="friend-card card-offline">
-              <div class="card-top">
-                <div class="user-info">
-                  <div class="avatar-wrapper">
-                    <img class="avatar-img" src="${avatar}" alt="${name}" />
-                  </div>
-                  <div class="user-name">${name}</div>
-                </div>
-                ${deleteButtonErrorHtml}
-              </div>
-              <div class="track-details">
-                <div class="track-info">
-                  <div class="track-title" style="color: #ff6b6b;">Connection Lost</div>
-                  <div class="track-artists">Could not authenticate with Spotify.</div>
-                  <div class="track-album">Token might have expired or been revoked.</div>
-                </div>
-              </div>
-            </div>
-          `;
-        }
-
-        // Active Playback State
         if (friend.playing) {
           const trackTitle = escapeHTML(friend.track);
           const artists = escapeHTML(friend.artists);
@@ -1027,44 +1577,86 @@
           const progressPercent = Math.min(100, ((friend.progressMs || 0) / (friend.durationMs || 1)) * 100);
 
           return `
-            <div class="friend-card active-glow">
-              <div class="card-top">
-                <div class="user-info">
-                  <div class="avatar-wrapper">
-                    <img class="avatar-img" src="${avatar}" alt="${name}" />
-                    <div class="active-indicator"></div>
+            <div class="friend-card active-glow" id="card-${friend.spotifyId}">
+              <div class="card-content-wrap">
+                <div class="card-top">
+                  <div class="user-info-area">
+                    <div class="avatar-wrapper">
+                      <img class="avatar-img" src="${avatar}" alt="${name}" />
+                      <div class="live-dot"></div>
+                    </div>
+                    <div>
+                      <div class="user-name-title">${name}</div>
+                      ${customStatus ? `<div class="user-custom-status">${customStatus}</div>` : ''}
+                    </div>
                   </div>
-                  <div>
-                    <div class="user-name">${name}</div>
+                  <div style="display: flex; align-items: center; gap: 8px;">
+                    <div class="equalizer-bars">
+                      <div class="eq-bar"></div>
+                      <div class="eq-bar"></div>
+                      <div class="eq-bar"></div>
+                      <div class="eq-bar"></div>
+                    </div>
+                    <span class="status-badge live">Live</span>
                   </div>
                 </div>
-                <div style="display: flex; align-items: center; gap: 8px;">
-                  <span class="status-badge live">Live</span>
-                  ${deleteButtonHtml}
+
+                <div class="track-details-row">
+                  <div class="album-art-wrap">
+                    ${albumArt ? `<img class="album-art" src="${albumArt}" alt="${album}" />` : '<div class="album-art"></div>'}
+                  </div>
+                  <div class="track-info-col">
+                    <a href="${url}" target="_blank" class="track-title">${trackTitle}</a>
+                    <div class="track-artist">${artists}</div>
+                    <div class="track-album">${album}</div>
+                  </div>
                 </div>
-              </div>
-              <div class="track-details">
-                ${albumArt ? `<img class="album-art" src="${albumArt}" alt="${album}" />` : '<div class="album-art" style="display: flex; align-items: center; justify-content: center; background: rgba(255,255,255,0.05);"><i data-lucide="music" style="color: var(--text-muted);"></i></div>'}
-                <div class="track-info">
-                  <a href="${url}" target="_blank" class="track-title">${trackTitle}</a>
-                  <div class="track-artists">${artists}</div>
-                  <div class="track-album">${album}</div>
+
+                <div class="progress-section">
+                  <div class="progress-bar-bg">
+                    <div id="progress-bar-${friend.spotifyId}" class="progress-bar-fill" style="width: ${progressPercent}%;"></div>
+                  </div>
+                  <div class="progress-time-row">
+                    <span id="progress-time-${friend.spotifyId}">${msToClock(friend.progressMs)}</span>
+                    <span>${msToClock(friend.durationMs)}</span>
+                  </div>
                 </div>
-              </div>
-              <div class="progress-section">
-                <div class="progress-bar-container">
-                  <div id="progress-bar-${spotifyId}" class="progress-bar-fill" style="width: ${progressPercent}%;"></div>
+
+                <div class="card-actions-toolbar">
+                  ${!isMe ? `
+                    <button class="action-pill-btn sync-btn" onclick="syncPlayback('${friend.spotifyId}')">
+                      <i data-lucide="radio" style="width: 13px; height: 13px;"></i>
+                      <span>Listen Along</span>
+                    </button>
+                  ` : ''}
+                  <button class="action-pill-btn" onclick="queueTrack('${friend.uri}')">
+                    <i data-lucide="list-plus" style="width: 13px; height: 13px;"></i>
+                    <span>Queue</span>
+                  </button>
+                  ${friend.previewUrl ? `
+                    <button class="action-pill-btn" onclick="toggleAudioPreview('${friend.previewUrl}')">
+                      <i data-lucide="volume-2" style="width: 13px; height: 13px;"></i>
+                      <span>Preview</span>
+                    </button>
+                  ` : ''}
+                  <button class="action-pill-btn" onclick="shareFriendTrackToChat('${friend.spotifyId}')">
+                    <i data-lucide="share" style="width: 13px; height: 13px;"></i>
+                  </button>
                 </div>
-                <div class="progress-times">
-                  <span id="progress-time-${spotifyId}">${msToClock(friend.progressMs)}</span>
-                  <span>${msToClock(friend.durationMs)}</span>
+
+                <div class="reactions-row">
+                  <button class="reaction-btn" onclick="sendLiveReaction('${friend.spotifyId}', '🔥')">🔥</button>
+                  <button class="reaction-btn" onclick="sendLiveReaction('${friend.spotifyId}', '❤️')">❤️</button>
+                  <button class="reaction-btn" onclick="sendLiveReaction('${friend.spotifyId}', '🕺')">🕺</button>
+                  <button class="reaction-btn" onclick="sendLiveReaction('${friend.spotifyId}', '⚡')">⚡</button>
+                  <button class="reaction-btn" onclick="sendLiveReaction('${friend.spotifyId}', '☕')">☕</button>
+                  <button class="reaction-btn" onclick="sendLiveReaction('${friend.spotifyId}', '💀')">💀</button>
                 </div>
               </div>
             </div>
           `;
         }
 
-        // Offline / Recently Played Fallback
         if (friend.lastPlayed) {
           const trackTitle = escapeHTML(friend.track);
           const artists = escapeHTML(friend.artists);
@@ -1074,26 +1666,29 @@
           const relativeTime = timeAgo(friend.playedAt);
 
           return `
-            <div class="friend-card card-offline">
-              <div class="card-top">
-                <div class="user-info">
-                  <div class="avatar-wrapper">
-                    <img class="avatar-img" src="${avatar}" alt="${name}" />
+            <div class="friend-card card-offline" id="card-${friend.spotifyId}">
+              <div class="card-content-wrap">
+                <div class="card-top">
+                  <div class="user-info-area">
+                    <div class="avatar-wrapper">
+                      <img class="avatar-img" src="${avatar}" alt="${name}" />
+                    </div>
+                    <div>
+                      <div class="user-name-title">${name}</div>
+                      ${customStatus ? `<div class="user-custom-status">${customStatus}</div>` : ''}
+                    </div>
                   </div>
-                  <div class="user-name">${name}</div>
-                </div>
-                <div style="display: flex; align-items: center; gap: 8px;">
                   <span class="status-badge offline">Offline</span>
-                  ${deleteButtonHtml}
                 </div>
-              </div>
-              <div class="track-details">
-                ${albumArt ? `<img class="album-art" src="${albumArt}" alt="${album}" />` : '<div class="album-art" style="display: flex; align-items: center; justify-content: center; background: rgba(255,255,255,0.05);"><i data-lucide="music" style="color: var(--text-muted);"></i></div>'}
-                <div class="track-info">
-                  <a href="${url}" target="_blank" class="track-title" style="color: var(--text-muted);">${trackTitle}</a>
-                  <div class="track-artists">${artists}</div>
-                  <div class="track-album" style="font-size: 0.75rem; color: var(--green); margin-top: 4px;">
-                    Last played ${relativeTime}
+
+                <div class="track-details-row">
+                  <div class="album-art-wrap">
+                    ${albumArt ? `<img class="album-art" src="${albumArt}" alt="${album}" />` : '<div class="album-art"></div>'}
+                  </div>
+                  <div class="track-info-col">
+                    <a href="${url}" target="_blank" class="track-title" style="color: var(--text-muted);">${trackTitle}</a>
+                    <div class="track-artist">${artists}</div>
+                    <div style="font-size: 0.75rem; color: var(--green); margin-top: 4px;">Last played ${relativeTime}</div>
                   </div>
                 </div>
               </div>
@@ -1101,74 +1696,603 @@
           `;
         }
 
-        // Idle state (No recently played available)
         return `
-          <div class="friend-card card-offline">
-            <div class="card-top">
-              <div class="user-info">
-                <div class="avatar-wrapper">
-                  <img class="avatar-img" src="${avatar}" alt="${name}" />
+          <div class="friend-card card-offline" id="card-${friend.spotifyId}">
+            <div class="card-content-wrap">
+              <div class="card-top">
+                <div class="user-info-area">
+                  <div class="avatar-wrapper">
+                    <img class="avatar-img" src="${avatar}" alt="${name}" />
+                  </div>
+                  <div>
+                    <div class="user-name-title">${name}</div>
+                    ${customStatus ? `<div class="user-custom-status">${customStatus}</div>` : ''}
+                  </div>
                 </div>
-                <div class="user-name">${name}</div>
-              </div>
-              <div style="display: flex; align-items: center; gap: 8px;">
                 <span class="status-badge offline">Offline</span>
-                ${deleteButtonHtml}
               </div>
-            </div>
-            <div class="track-details">
-              <div class="track-info">
-                <div class="track-title" style="color: var(--text-muted);">Not listening</div>
-                <div class="track-artists">Idle / Off the grid</div>
-              </div>
+              <div style="color: var(--text-dim); font-size: 0.88rem; padding: 12px 0;">Not playing anything right now.</div>
             </div>
           </div>
         `;
       }).join('');
 
-      lucide.createIcons();
+      if (window.lucide) lucide.createIcons();
     }
 
-    // Client-side ticking timer for currently playing tracks (runs every 1 second)
     function startProgressTicking() {
       if (progressTimer) clearInterval(progressTimer);
-      
       progressTimer = setInterval(() => {
-        friendsState.forEach(friend => {
+        feedData.forEach(friend => {
           if (friend.playing && friend.progressMs !== undefined && friend.durationMs) {
-            // Tick progress forward by 1000ms
             friend.progressMs = Math.min(friend.durationMs, friend.progressMs + 1000);
-            
-            // Instantly update elements in the DOM instead of re-rendering whole card list
             const bar = document.getElementById(`progress-bar-${friend.spotifyId}`);
             const text = document.getElementById(`progress-time-${friend.spotifyId}`);
-            
-            if (bar) {
-              const pct = (friend.progressMs / friend.durationMs) * 100;
-              bar.style.width = `${pct}%`;
-            }
-            if (text) {
-              text.textContent = msToClock(friend.progressMs);
-            }
+            if (bar) bar.style.width = `${(friend.progressMs / friend.durationMs) * 100}%`;
+            if (text) text.textContent = msToClock(friend.progressMs);
           }
         });
       }, 1000);
     }
 
-    // Initial setup and timers
-    updateLayout();
-    refresh();
-    startProgressTicking();
-    
-    // Poll the backend server for fresh sync data every 15 seconds
-    setInterval(refresh, 15000);
-
-    // Register Service Worker for PWA installability
-    if ('serviceWorker' in navigator) {
-      window.addEventListener('load', () => {
-        navigator.serviceWorker.register('/sw.js').catch(err => console.log('SW registration failed', err));
-      });
+    async function syncPlayback(targetSpotifyId) {
+      showToast('Syncing playback with Spotify player...');
+      try {
+        const res = await fetch('/api/playback/sync', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ targetSpotifyId }),
+        });
+        const data = await res.json();
+        if (res.ok) {
+          showToast(data.message);
+        } else {
+          showToast(data.error || 'Failed to sync playback');
+        }
+      } catch (err) {
+        showToast('Error syncing playback');
+      }
     }
+
+    async function queueTrack(uri) {
+      if (!uri) return;
+      try {
+        const res = await fetch('/api/playback/queue', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ uri }),
+        });
+        const data = await res.json();
+        if (res.ok) {
+          showToast('Track added to Spotify queue!');
+        } else {
+          showToast(data.error || 'Could not add to queue');
+        }
+      } catch (err) {
+        showToast('Error queueing track');
+      }
+    }
+
+    function toggleAudioPreview(url) {
+      const player = document.getElementById('audioPreviewPlayer');
+      if (currentPreviewAudioUrl === url && !player.paused) {
+        player.pause();
+        currentPreviewAudioUrl = null;
+        showToast('Preview paused.');
+      } else {
+        player.src = url;
+        player.play().catch(e => console.log('Autoplay restriction:', e));
+        currentPreviewAudioUrl = url;
+        showToast('Playing 30s audio preview 🔊');
+      }
+    }
+
+    function sendLiveReaction(targetSpotifyId, emoji) {
+      socket.emit('live_reaction', {
+        targetSpotifyId,
+        emoji,
+        fromName: currentUser?.name || 'A friend',
+      });
+      triggerFloatingReaction(targetSpotifyId, emoji);
+    }
+
+    function triggerFloatingReaction(targetSpotifyId, emoji) {
+      const card = document.getElementById(`card-${targetSpotifyId}`);
+      if (!card) return;
+
+      const particle = document.createElement('div');
+      particle.className = 'floating-emoji';
+      particle.textContent = emoji;
+      particle.style.left = `${Math.floor(20 + Math.random() * 60)}%`;
+      card.appendChild(particle);
+
+      setTimeout(() => particle.remove(), 1800);
+    }
+
+    async function loadChatMessages() {
+      try {
+        const res = await fetch(`/api/chat/messages?roomId=${encodeURIComponent(activeRoom)}`);
+        const messages = await res.json();
+        const container = document.getElementById('chatMessagesStream');
+        container.innerHTML = '';
+        messages.forEach(appendChatMessage);
+        container.scrollTop = container.scrollHeight;
+      } catch (err) {
+        console.error('Chat load error:', err);
+      }
+    }
+
+    function switchRoom(roomId, title = '# Group Lounge') {
+      socket.emit('leave_room', activeRoom);
+      activeRoom = roomId;
+      socket.emit('join_room', activeRoom);
+      document.getElementById('activeRoomTitle').textContent = title;
+      loadChatMessages();
+    }
+
+    function handleSendChat(e) {
+      e.preventDefault();
+      const input = document.getElementById('chatInput');
+      const text = input.value.trim();
+      if (!text || !currentUser) return;
+
+      socket.emit('chat_message', {
+        roomId: activeRoom,
+        senderId: currentUser.spotifyId,
+        senderName: currentUser.name,
+        senderAvatar: currentUser.avatarUrl,
+        text,
+      });
+
+      input.value = '';
+      socket.emit('typing_stop', { roomId: activeRoom, senderName: currentUser.name });
+    }
+
+    function handleTypingEvent() {
+      if (!currentUser) return;
+      socket.emit('typing_start', { roomId: activeRoom, senderName: currentUser.name });
+      if (typingTimer) clearTimeout(typingTimer);
+      typingTimer = setTimeout(() => {
+        socket.emit('typing_stop', { roomId: activeRoom, senderName: currentUser.name });
+      }, 1500);
+    }
+
+    function appendChatMessage(msg) {
+      const container = document.getElementById('chatMessagesStream');
+      if (!container) return;
+
+      const isMine = currentUser && msg.senderId === currentUser.spotifyId;
+      const avatar = msg.senderAvatar || 'https://www.gravatar.com/avatar/00000000000000000000000000000000?d=mp&f=y';
+      const timeStr = new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+      let songCardHtml = '';
+      if (msg.sharedTrack) {
+        const st = msg.sharedTrack;
+        songCardHtml = `
+          <div class="chat-song-card">
+            <img class="chat-song-art" src="${st.albumArt || ''}" />
+            <div class="chat-song-meta">
+              <div class="chat-song-name">${escapeHTML(st.name)}</div>
+              <div class="chat-song-artist">${escapeHTML(st.artists)}</div>
+            </div>
+            ${st.uri ? `
+              <button class="action-pill-btn sync-btn btn-sm" onclick="queueTrack('${st.uri}')" title="Add to Queue">
+                <i data-lucide="plus" style="width: 12px; height: 12px;"></i>
+              </button>
+            ` : ''}
+          </div>
+        `;
+      }
+
+      const bubble = document.createElement('div');
+      bubble.className = `chat-bubble ${isMine ? 'mine' : ''}`;
+      bubble.innerHTML = `
+        <img class="chat-bubble-avatar" src="${avatar}" alt="${msg.senderName}" />
+        <div class="chat-bubble-body">
+          <div class="chat-bubble-author">${isMine ? 'You' : escapeHTML(msg.senderName)}</div>
+          ${msg.text ? `<div class="chat-bubble-text">${escapeHTML(msg.text)}</div>` : ''}
+          ${songCardHtml}
+          <div class="chat-bubble-time">${timeStr}</div>
+        </div>
+      `;
+
+      container.appendChild(bubble);
+      container.scrollTop = container.scrollHeight;
+      if (window.lucide) lucide.createIcons();
+    }
+
+    function shareMyCurrentTrackToChat() {
+      const myCard = feedData.find(f => f.spotifyId === currentUser?.spotifyId);
+      if (!myCard || !myCard.playing) {
+        showToast('You are not currently playing a song on Spotify!');
+        return;
+      }
+
+      socket.emit('chat_message', {
+        roomId: activeRoom,
+        senderId: currentUser.spotifyId,
+        senderName: currentUser.name,
+        senderAvatar: currentUser.avatarUrl,
+        text: `Check out what I'm listening to right now:`,
+        sharedTrack: {
+          name: myCard.track,
+          artists: myCard.artists,
+          album: myCard.album,
+          albumArt: myCard.albumArt,
+          spotifyUrl: myCard.spotifyUrl,
+          uri: myCard.uri,
+          previewUrl: myCard.previewUrl,
+        },
+      });
+      showToast('Shared track to chat lounge!');
+    }
+
+    function shareFriendTrackToChat(friendId) {
+      const card = feedData.find(f => f.spotifyId === friendId);
+      if (!card || !card.playing) return;
+
+      socket.emit('chat_message', {
+        roomId: activeRoom,
+        senderId: currentUser.spotifyId,
+        senderName: currentUser.name,
+        senderAvatar: currentUser.avatarUrl,
+        text: `Listening with ${card.name}:`,
+        sharedTrack: {
+          name: card.track,
+          artists: card.artists,
+          album: card.album,
+          albumArt: card.albumArt,
+          spotifyUrl: card.spotifyUrl,
+          uri: card.uri,
+          previewUrl: card.previewUrl,
+        },
+      });
+      showToast('Track dropped into lounge chat!');
+      switchTab('lounge');
+    }
+
+    function updateFriendsView() {
+      if (!currentUser) return;
+
+      const reqList = document.getElementById('pendingRequestsList');
+      if (currentUser.friendRequestsReceived?.length) {
+        reqList.innerHTML = currentUser.friendRequestsReceived.map(req => `
+          <div class="friend-request-item">
+            <div style="display: flex; align-items: center; gap: 10px;">
+              <img src="${req.avatarUrl || 'https://www.gravatar.com/avatar/00000000000000000000000000000000?d=mp&f=y'}" style="width: 34px; height: 34px; border-radius: 50%;" />
+              <div>
+                <div style="font-weight: 700; font-size: 0.9rem;">${escapeHTML(req.name)}</div>
+                <div style="font-size: 0.75rem; color: var(--text-muted); font-family: monospace;">${req.friendCode || ''}</div>
+              </div>
+            </div>
+            <div style="display: flex; gap: 6px;">
+              <button class="btn btn-sm" onclick="acceptFriendRequest('${req.spotifyId}')">Accept</button>
+              <button class="btn btn-sm btn-secondary" onclick="rejectFriendRequest('${req.spotifyId}')">Decline</button>
+            </div>
+          </div>
+        `).join('');
+      } else {
+        reqList.innerHTML = `<p style="color: var(--text-muted); font-size: 0.88rem;">No pending friend requests.</p>`;
+      }
+
+      const friendsContainer = document.getElementById('myConfirmedFriendsList');
+      if (currentUser.friends?.length) {
+        friendsContainer.innerHTML = currentUser.friends.map(f => `
+          <div style="background: rgba(14,18,26,0.7); border: 1px solid var(--border); border-radius: 12px; padding: 14px; display: flex; flex-direction: column; gap: 10px;">
+            <div style="display: flex; align-items: center; gap: 10px;">
+              <img src="${f.avatarUrl || 'https://www.gravatar.com/avatar/00000000000000000000000000000000?d=mp&f=y'}" style="width: 40px; height: 40px; border-radius: 50%;" />
+              <div>
+                <div style="font-weight: 700; font-size: 0.92rem;">${escapeHTML(f.name)}</div>
+                <div style="font-size: 0.75rem; color: var(--text-muted); font-family: monospace;">${f.friendCode}</div>
+              </div>
+            </div>
+            <div style="display: flex; gap: 6px; margin-top: auto;">
+              <button class="btn btn-sm btn-purple" style="flex: 1;" onclick="openTasteMatchWith('${f.spotifyId}')">Match</button>
+              <button class="btn btn-sm btn-secondary" onclick="removeFriend('${f.spotifyId}')" title="Remove Friend"><i data-lucide="user-minus" style="width: 14px; height: 14px;"></i></button>
+            </div>
+          </div>
+        `).join('');
+      } else {
+        friendsContainer.innerHTML = `<p style="color: var(--text-muted); font-size: 0.88rem; grid-column: 1 / -1;">No friends added yet. Send an invite or search by Friend Code above!</p>`;
+      }
+
+      if (window.lucide) lucide.createIcons();
+    }
+
+    async function searchForFriends() {
+      const q = document.getElementById('friendSearchQuery').value.trim();
+      if (!q) return;
+
+      try {
+        const res = await fetch(`/api/friends/search?q=${encodeURIComponent(q)}`);
+        const results = await res.json();
+        const area = document.getElementById('searchResultsArea');
+
+        if (!results.length) {
+          area.innerHTML = `<p style="color: var(--text-muted); font-size: 0.82rem;">No users found with that code or name.</p>`;
+          return;
+        }
+
+        area.innerHTML = results.map(u => `
+          <div class="friend-request-item">
+            <div style="display: flex; align-items: center; gap: 10px;">
+              <img src="${u.avatarUrl || 'https://www.gravatar.com/avatar/00000000000000000000000000000000?d=mp&f=y'}" style="width: 34px; height: 34px; border-radius: 50%;" />
+              <div>
+                <div style="font-weight: 700; font-size: 0.88rem;">${escapeHTML(u.name)}</div>
+                <div style="font-size: 0.75rem; color: var(--text-muted); font-family: monospace;">${u.friendCode}</div>
+              </div>
+            </div>
+            ${u.friendshipStatus === 'friend' ? '<span class="status-badge live">Friends</span>' : 
+              u.friendshipStatus === 'pending_sent' ? '<span class="status-badge offline">Requested</span>' :
+              `<button class="btn btn-sm" onclick="sendFriendRequest('${u.spotifyId}')">Add Friend</button>`}
+          </div>
+        `).join('');
+        if (window.lucide) lucide.createIcons();
+      } catch (err) {
+        showToast('Error searching friends');
+      }
+    }
+
+    async function sendFriendRequest(targetSpotifyId) {
+      try {
+        const res = await fetch('/api/friends/request', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ targetSpotifyId }),
+        });
+        const data = await res.json();
+        if (res.ok) {
+          showToast(data.message || 'Friend request sent!');
+          searchForFriends();
+        } else {
+          showToast(data.error);
+        }
+      } catch (err) {
+        showToast('Failed to send friend request');
+      }
+    }
+
+    async function acceptFriendRequest(targetSpotifyId) {
+      try {
+        const res = await fetch('/api/friends/accept', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ targetSpotifyId }),
+        });
+        if (res.ok) {
+          showToast('Friend request accepted!');
+          loadUserProfile();
+          fetchFeed();
+        }
+      } catch (err) {
+        showToast('Error accepting request');
+      }
+    }
+
+    async function rejectFriendRequest(targetSpotifyId) {
+      try {
+        await fetch('/api/friends/reject', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ targetSpotifyId }),
+        });
+        showToast('Request dismissed');
+        loadUserProfile();
+      } catch (err) {
+        showToast('Error rejecting request');
+      }
+    }
+
+    async function removeFriend(id) {
+      if (!confirm('Remove this friend from your circle?')) return;
+      try {
+        await fetch(`/api/friends/${id}`, { method: 'DELETE' });
+        showToast('Friend removed');
+        loadUserProfile();
+        fetchFeed();
+      } catch (err) {
+        showToast('Error removing friend');
+      }
+    }
+
+    function populateTasteFriendsDropdown() {
+      const select = document.getElementById('tasteMatchFriendSelect');
+      if (!select || !currentUser) return;
+
+      select.innerHTML = '<option value="">Select a friend...</option>' + 
+        (currentUser.friends || []).map(f => `<option value="${f.spotifyId}">${escapeHTML(f.name)} (${f.friendCode})</option>`).join('');
+    }
+
+    function openTasteMatchWith(friendId) {
+      switchTab('blend');
+      const select = document.getElementById('tasteMatchFriendSelect');
+      if (select) {
+        select.value = friendId;
+        runTasteMatch();
+      }
+    }
+
+    async function runTasteMatch() {
+      const friendId = document.getElementById('tasteMatchFriendSelect').value;
+      const resArea = document.getElementById('tasteMatchResultArea');
+      if (!friendId) {
+        resArea.style.display = 'none';
+        return;
+      }
+
+      try {
+        const res = await fetch(`/api/taste-match/${friendId}`);
+        const data = await res.json();
+        if (res.ok) {
+          resArea.style.display = 'block';
+          document.getElementById('matchScoreValue').textContent = `${data.matchScore}%`;
+          document.getElementById('matchScoreCircle').style.setProperty('--pct', `${data.matchScore}%`);
+          document.getElementById('tasteMatchSubtitle').textContent = `Taste Compatibility with ${data.friendName}`;
+
+          const tags = [...(data.sharedArtists || []), ...(data.sharedGenres || [])];
+          document.getElementById('sharedTasteTags').innerHTML = tags.length ? 
+            tags.map(t => `<span class="taste-tag">${escapeHTML(t)}</span>`).join('') :
+            '<span style="color: var(--text-muted); font-size: 0.85rem;">Diverse unique tastes — great for discovering new music!</span>';
+        }
+      } catch (err) {
+        showToast('Error calculating taste match');
+      }
+    }
+
+    async function createSpotifyBlend() {
+      const friendId = document.getElementById('tasteMatchFriendSelect').value;
+      if (!friendId) return;
+
+      const btn = document.getElementById('createBlendBtn');
+      btn.innerHTML = `<i data-lucide="loader-2" class="spin"></i><span>Blending Tracks...</span>`;
+      if (window.lucide) lucide.createIcons();
+
+      try {
+        const res = await fetch('/api/blend/create', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ friendId }),
+        });
+        const data = await res.json();
+        if (res.ok && data.playlistUrl) {
+          showToast(`Blend playlist "${data.playlistName}" created in Spotify!`);
+          window.open(data.playlistUrl, '_blank');
+        } else {
+          showToast(data.error || 'Failed to create playlist');
+        }
+      } catch (err) {
+        showToast('Error generating playlist');
+      } finally {
+        btn.innerHTML = `<i data-lucide="disc"></i><span>Generate Spotify Blend Playlist</span>`;
+        if (window.lucide) lucide.createIcons();
+      }
+    }
+
+    function openStatusModal() {
+      const modal = document.getElementById('statusModal');
+      modal.style.display = 'flex';
+      setTimeout(() => modal.classList.add('show'), 10);
+    }
+    function closeStatusModal() {
+      const modal = document.getElementById('statusModal');
+      modal.classList.remove('show');
+      setTimeout(() => modal.style.display = 'none', 300);
+    }
+    async function saveCustomStatus() {
+      const emoji = document.getElementById('statusEmojiInput').value.trim() || '🎧';
+      const text = document.getElementById('statusTextInput').value.trim();
+
+      try {
+        const res = await fetch('/api/user/status', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ statusEmoji: emoji, statusMessage: text }),
+        });
+        if (res.ok) {
+          showToast('Status updated!');
+          closeStatusModal();
+          loadUserProfile();
+          fetchFeed();
+        }
+      } catch (err) {
+        showToast('Failed to update status');
+      }
+    }
+
+    function openInviteModal() {
+      const modal = document.getElementById('inviteModal');
+      modal.style.display = 'flex';
+      setTimeout(() => modal.classList.add('show'), 10);
+
+      const refCode = currentUser?.friendCode || '';
+      const inviteUrl = `${window.location.origin}/login?ref=${encodeURIComponent(refCode)}`;
+      document.getElementById('inviteModalLink').value = inviteUrl;
+
+      const qrContainer = document.getElementById('qrcodeContainer');
+      qrContainer.innerHTML = '';
+      if (window.QRCode) {
+        new QRCode(qrContainer, {
+          text: inviteUrl,
+          width: 170,
+          height: 170,
+          colorDark: '#080a0f',
+          colorLight: '#ffffff',
+          correctLevel: QRCode.CorrectLevel.M,
+        });
+      }
+    }
+    function closeInviteModal() {
+      const modal = document.getElementById('inviteModal');
+      modal.classList.remove('show');
+      setTimeout(() => modal.style.display = 'none', 300);
+    }
+    function copyInviteModalLink() {
+      const link = document.getElementById('inviteModalLink').value;
+      copyToClipboard(link, 'Invite link copied to clipboard!');
+    }
+    function copyMyFriendCode() {
+      if (currentUser?.friendCode) {
+        copyToClipboard(currentUser.friendCode, `Friend code ${currentUser.friendCode} copied!`);
+      }
+    }
+
+    function copyToClipboard(text, successMsg) {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(() => showToast(successMsg)).catch(() => fallbackCopy(text, successMsg));
+      } else {
+        fallbackCopy(text, successMsg);
+      }
+    }
+
+    function fallbackCopy(text, successMsg) {
+      const el = document.createElement('textarea');
+      el.value = text;
+      el.setAttribute('readonly', '');
+      el.style.position = 'absolute';
+      el.style.left = '-9999px';
+      document.body.appendChild(el);
+      el.select();
+      document.execCommand('copy');
+      document.body.removeChild(el);
+      showToast(successMsg);
+    }
+
+    function showToast(msg) {
+      const toast = document.getElementById('toast');
+      const text = document.getElementById('toast-message');
+      text.textContent = msg;
+      toast.classList.add('show');
+      setTimeout(() => toast.classList.remove('show'), 3500);
+    }
+
+    function msToClock(ms) {
+      if (!ms || ms < 0) ms = 0;
+      const totalSec = Math.floor(ms / 1000);
+      const min = Math.floor(totalSec / 60);
+      const sec = totalSec % 60;
+      return `${min}:${String(sec).padStart(2, '0')}`;
+    }
+
+    function timeAgo(dateString) {
+      if (!dateString) return '';
+      const sec = Math.floor((Date.now() - new Date(dateString)) / 1000);
+      if (sec < 60) return `${sec}s ago`;
+      const min = Math.floor(sec / 60);
+      if (min < 60) return `${min}m ago`;
+      const hrs = Math.floor(min / 60);
+      if (hrs < 24) return `${hrs}h ago`;
+      return `${Math.floor(hrs / 24)}d ago`;
+    }
+
+    function escapeHTML(str) {
+      if (!str) return '';
+      return String(str).replace(/[&<>'"]/g, tag => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[tag] || tag));
+    }
+
+    loadUserProfile();
+    fetchFeed();
+    startProgressTicking();
+    setInterval(fetchFeed, 12000);
   </script>
 </body>
 </html>

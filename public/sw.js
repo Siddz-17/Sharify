@@ -1,4 +1,4 @@
-// Service Worker to enable PWA installability
+// Service Worker for Sharify PWA
 self.addEventListener('install', (e) => {
   self.skipWaiting();
 });
@@ -7,7 +7,7 @@ self.addEventListener('activate', (e) => {
   e.waitUntil(self.clients.claim());
 });
 
+// Avoid intercepting WebSockets or dynamic API calls on Safari
 self.addEventListener('fetch', (e) => {
-  // Pass-through fetch requests directly to the network
-  e.respondWith(fetch(e.request));
+  // Let browser handle all requests naturally without breaking WebSockets / Range requests in Safari WebKit
 });
