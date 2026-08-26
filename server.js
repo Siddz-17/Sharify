@@ -339,7 +339,12 @@ app.get('/callback', async (req, res) => {
     res.redirect(`/?connected=${encodeURIComponent(data.users[userIndex].name)}&userId=${encodeURIComponent(spotifyId)}`);
   } catch (err) {
     console.error('Error during Spotify Auth callback:', err.response?.data || err.message);
-    res.status(500).send('Something went wrong connecting to Spotify. Check server logs.');
+    res.status(500).json({
+      message: 'Something went wrong connecting to Spotify.',
+      error: err.message,
+      details: err.response?.data || null,
+      stack: err.stack
+    });
   }
 });
 
