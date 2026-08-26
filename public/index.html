@@ -722,13 +722,55 @@
       overflow: hidden;
       box-shadow: 0 16px 40px var(--shadow);
     }
+    .chat-back-btn {
+      display: none;
+    }
     @media (max-width: 768px) {
+      body {
+        padding: 16px 12px 100px;
+      }
+      header {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 14px;
+        padding-bottom: 16px;
+        margin-bottom: 20px;
+      }
+      .brand-section {
+        justify-content: center;
+      }
+      .nav-tabs {
+        width: 100%;
+        overflow-x: auto;
+        flex-shrink: 0;
+      }
+      .nav-tab {
+        padding: 8px 12px;
+        font-size: 0.82rem;
+        flex: 1;
+        justify-content: center;
+      }
       .lounge-container {
         grid-template-columns: 1fr;
-        height: auto;
+        height: 600px;
       }
       .lounge-sidebar {
+        display: block;
+        border-right: none;
+        height: 100%;
+      }
+      .lounge-chat-area {
         display: none;
+        height: 100%;
+      }
+      .lounge-container.show-chat .lounge-sidebar {
+        display: none;
+      }
+      .lounge-container.show-chat .lounge-chat-area {
+        display: flex;
+      }
+      .chat-back-btn {
+        display: flex !important;
       }
     }
     .lounge-sidebar {
@@ -1145,6 +1187,9 @@
 
         <div class="lounge-chat-area">
           <div class="chat-header">
+            <button class="chat-back-btn" onclick="goBackToRooms()" title="Back to Rooms" style="background: none; border: none; color: var(--text); padding: 4px; cursor: pointer; align-items: center; margin-right: 8px;">
+              <i data-lucide="arrow-left" style="width: 20px; height: 20px;"></i>
+            </button>
             <div class="chat-channel-title">
               <i data-lucide="message-circle" style="width: 18px; height: 18px; color: var(--green);"></i>
               <span id="activeRoomTitle"># Group Lounge</span>
@@ -1793,8 +1838,18 @@
       activeRoom = roomId;
       socket.emit('join_room', activeRoom);
       document.getElementById('activeRoomTitle').textContent = title;
+      
+      // Switch view on mobile to show the chat stream
+      const container = document.querySelector('.lounge-container');
+      if (container) container.classList.add('show-chat');
+
       loadChatSidebar();
       loadChatMessages();
+    }
+
+    function goBackToRooms() {
+      const container = document.querySelector('.lounge-container');
+      if (container) container.classList.remove('show-chat');
     }
 
     async function loadChatSidebar() {
