@@ -1107,10 +1107,6 @@
           <span>Friends</span>
           <span id="requestsBadge" class="tab-badge" style="display: none;">0</span>
         </button>
-        <button class="nav-tab" onclick="switchTab('blend')">
-          <i data-lucide="sparkles" style="width: 16px; height: 16px;"></i>
-          <span>Match & Blend</span>
-        </button>
       </nav>
 
       <div class="header-user-section" id="headerUserSection"></div>
@@ -1119,10 +1115,6 @@
     <!-- TAB 1: Live Friend Feed -->
     <section id="tab-feed" class="tab-content active">
       <div class="feed-toolbar">
-        <div class="search-filter-box">
-          <i data-lucide="search" style="width: 16px; height: 16px;"></i>
-          <input id="feedSearchInput" class="input-field" placeholder="Filter by track, artist, or friend..." oninput="filterFeed()" />
-        </div>
         <div class="feed-actions-right">
           <button class="action-pill-btn" onclick="toggleFeedFilter('playing')" id="filterPlayingBtn">
             <i data-lucide="flame" style="width: 14px; height: 14px;"></i>
@@ -1235,39 +1227,7 @@
         </div>
       </div>
     </section>
-
-    <!-- TAB 4: Taste Match & Spotify Blend -->
-    <section id="tab-blend" class="tab-content">
-      <div class="taste-match-hero">
-        <h2 style="font-family: 'Outfit', sans-serif; font-size: 1.8rem; margin-bottom: 8px;">Musical Compatibility & Group Blend</h2>
-        <p style="color: var(--text-muted); max-width: 500px; margin: 0 auto 24px; font-size: 0.95rem;">Select any friend to compare top genres, compute your Music Match score, or generate a shared Spotify Blend playlist.</p>
-        
-        <div style="max-width: 320px; margin: 0 auto 24px;">
-          <label style="font-size: 0.8rem; color: var(--text-muted); display: block; margin-bottom: 6px;">COMPARE WITH FRIEND</label>
-          <select id="tasteMatchFriendSelect" class="input-field" onchange="runTasteMatch()">
-            <option value="">Select a friend...</option>
-          </select>
-        </div>
-
-        <div id="tasteMatchResultArea" style="display: none;">
-          <div class="match-score-circle" id="matchScoreCircle">
-            <div class="match-score-inner" id="matchScoreValue">85%</div>
-          </div>
-          <h3 id="tasteMatchSubtitle" style="font-weight: 700; margin-bottom: 12px;"></h3>
-          
-          <div style="margin-bottom: 24px;">
-            <div style="font-size: 0.82rem; color: var(--text-muted); margin-bottom: 8px;">SHARED FAVORITE ARTISTS & GENRES</div>
-            <div class="taste-tags-wrap" id="sharedTasteTags"></div>
-          </div>
-
-          <button class="btn btn-purple" id="createBlendBtn" onclick="createSpotifyBlend()">
-            <i data-lucide="disc" style="width: 18px; height: 18px;"></i>
-            <span>Generate Spotify Blend Playlist</span>
-          </button>
-        </div>
-      </div>
-    </section>
-  </div>
+    </div>
 
   <audio id="audioPreviewPlayer" style="display: none;"></audio>
 
@@ -1370,6 +1330,13 @@
       loadUserProfile();
     });
 
+    socket.on('new_room', (newRoom) => {
+      const tabLounge = document.getElementById('tab-lounge');
+      if (tabLounge && tabLounge.classList.contains('active')) {
+        loadChatSidebar();
+      }
+    });
+
     function switchTab(tabId) {
       document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
       document.querySelectorAll('.nav-tab').forEach(b => b.classList.remove('active'));
@@ -1378,17 +1345,16 @@
       if (target) target.classList.add('active');
 
       const tabs = Array.from(document.querySelectorAll('.nav-tab'));
-      const activeIdx = ['feed', 'lounge', 'friends', 'blend'].indexOf(tabId);
+      const activeIdx = ['feed', 'lounge', 'friends'].indexOf(tabId);
       if (tabs[activeIdx]) tabs[activeIdx].classList.add('active');
 
       if (tabId === 'lounge') {
         const badge = document.getElementById('unreadChatBadge');
         if (badge) badge.style.display = 'none';
+        loadChatSidebar();
         loadChatMessages();
       } else if (tabId === 'friends') {
         loadUserProfile();
-      } else if (tabId === 'blend') {
-        populateTasteFriendsDropdown();
       }
 
       if (window.lucide) lucide.createIcons();
@@ -1827,7 +1793,96 @@
       activeRoom = roomId;
       socket.emit('join_room', activeRoom);
       document.getElementById('activeRoomTitle').textContent = title;
+      loadChatSidebar();
       loadChatMessages();
+    }
+
+    async function loadChatSidebar() {
+      try {
+        const roomsRes = await fetch('/api/rooms');
+        const rooms = await roomsRes.json();
+        const container = document.getElementById('channelList');
+        if (!container) return;
+
+        let html = '';
+
+        // Rooms Section
+        html += `
+          <div class="sidebar-section-heading" style="display: flex; justify-content: space-between; align-items: center; padding: 10px 0 6px 0; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; color: var(--text-muted); border-bottom: 1px solid rgba(255,255,255,0.05); margin-bottom: 8px;">
+            <span>Rooms & Groups</span>
+            <button class="icon-btn-sm" onclick="createGroupRoomModal()" title="Create Group" style="background: none; border: none; color: var(--green); cursor: pointer; padding: 2px; display: flex; align-items: center;">
+              <i data-lucide="plus" style="width: 14px; height: 14px;"></i>
+            </button>
+          </div>
+        `;
+
+        rooms.forEach(room => {
+          const isActive = activeRoom === room.id;
+          html += `
+            <button class="channel-btn ${isActive ? 'active' : ''}" onclick="switchRoom('${room.id}', '# ${escapeHTML(room.name)}')">
+              <i data-lucide="hash" style="width: 16px; height: 16px; color: ${isActive ? 'var(--green)' : 'var(--text-muted)'};"></i>
+              <span>${escapeHTML(room.name)}</span>
+            </button>
+          `;
+        });
+
+        // Direct Messages Section
+        html += `
+          <div class="sidebar-section-heading" style="padding: 14px 0 6px 0; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; color: var(--text-muted); border-bottom: 1px solid rgba(255,255,255,0.05); margin-bottom: 8px; margin-top: 14px;">
+            <span>Direct Messages</span>
+          </div>
+        `;
+
+        if (currentUser && Array.isArray(currentUser.friends) && currentUser.friends.length > 0) {
+          currentUser.friends.forEach(friend => {
+            const dmRoomId = [currentUser.spotifyId, friend.spotifyId].sort().join('-');
+            const isActive = activeRoom === dmRoomId;
+            const avatar = friend.avatarUrl || 'https://www.gravatar.com/avatar/00000000000000000000000000000000?d=mp&f=y';
+            
+            html += `
+              <button class="channel-btn ${isActive ? 'active' : ''}" onclick="switchRoom('${dmRoomId}', '@ ${escapeHTML(friend.name)}')">
+                <img src="${avatar}" style="width: 16px; height: 16px; border-radius: 50%; object-fit: cover; margin-right: 8px;" />
+                <span>${escapeHTML(friend.name)}</span>
+              </button>
+            `;
+          });
+        } else {
+          html += `
+            <div style="font-size: 0.8rem; color: var(--text-muted); padding: 8px 10px; font-style: italic;">
+              No friends added yet.
+            </div>
+          `;
+        }
+
+        container.innerHTML = html;
+        if (window.lucide) lucide.createIcons();
+      } catch (err) {
+        console.error('Error loading chat sidebar:', err);
+      }
+    }
+
+    async function createGroupRoomModal() {
+      const name = prompt('Enter a name for the new group chat:');
+      if (!name || !name.trim()) return;
+
+      try {
+        const res = await fetch('/api/rooms', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name: name.trim() })
+        });
+        if (res.ok) {
+          const newRoom = await res.json();
+          showToast(`Group "${newRoom.name}" created!`);
+          activeRoom = newRoom.id;
+          await loadChatSidebar();
+          switchRoom(newRoom.id, `# ${newRoom.name}`);
+        } else {
+          showToast('Failed to create group');
+        }
+      } catch (err) {
+        showToast('Error creating group room');
+      }
     }
 
     function handleSendChat(e) {
@@ -2095,78 +2150,7 @@
       }
     }
 
-    function populateTasteFriendsDropdown() {
-      const select = document.getElementById('tasteMatchFriendSelect');
-      if (!select || !currentUser) return;
 
-      select.innerHTML = '<option value="">Select a friend...</option>' + 
-        (currentUser.friends || []).map(f => `<option value="${f.spotifyId}">${escapeHTML(f.name)} (${f.friendCode})</option>`).join('');
-    }
-
-    function openTasteMatchWith(friendId) {
-      switchTab('blend');
-      const select = document.getElementById('tasteMatchFriendSelect');
-      if (select) {
-        select.value = friendId;
-        runTasteMatch();
-      }
-    }
-
-    async function runTasteMatch() {
-      const friendId = document.getElementById('tasteMatchFriendSelect').value;
-      const resArea = document.getElementById('tasteMatchResultArea');
-      if (!friendId) {
-        resArea.style.display = 'none';
-        return;
-      }
-
-      try {
-        const res = await fetch(`/api/taste-match/${friendId}`);
-        const data = await res.json();
-        if (res.ok) {
-          resArea.style.display = 'block';
-          document.getElementById('matchScoreValue').textContent = `${data.matchScore}%`;
-          document.getElementById('matchScoreCircle').style.setProperty('--pct', `${data.matchScore}%`);
-          document.getElementById('tasteMatchSubtitle').textContent = `Taste Compatibility with ${data.friendName}`;
-
-          const tags = [...(data.sharedArtists || []), ...(data.sharedGenres || [])];
-          document.getElementById('sharedTasteTags').innerHTML = tags.length ? 
-            tags.map(t => `<span class="taste-tag">${escapeHTML(t)}</span>`).join('') :
-            '<span style="color: var(--text-muted); font-size: 0.85rem;">Diverse unique tastes — great for discovering new music!</span>';
-        }
-      } catch (err) {
-        showToast('Error calculating taste match');
-      }
-    }
-
-    async function createSpotifyBlend() {
-      const friendId = document.getElementById('tasteMatchFriendSelect').value;
-      if (!friendId) return;
-
-      const btn = document.getElementById('createBlendBtn');
-      btn.innerHTML = `<i data-lucide="loader-2" class="spin"></i><span>Blending Tracks...</span>`;
-      if (window.lucide) lucide.createIcons();
-
-      try {
-        const res = await fetch('/api/blend/create', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ friendId }),
-        });
-        const data = await res.json();
-        if (res.ok && data.playlistUrl) {
-          showToast(`Blend playlist "${data.playlistName}" created in Spotify!`);
-          window.open(data.playlistUrl, '_blank');
-        } else {
-          showToast(data.error || 'Failed to create playlist');
-        }
-      } catch (err) {
-        showToast('Error generating playlist');
-      } finally {
-        btn.innerHTML = `<i data-lucide="disc"></i><span>Generate Spotify Blend Playlist</span>`;
-        if (window.lucide) lucide.createIcons();
-      }
-    }
 
     function openStatusModal() {
       const modal = document.getElementById('statusModal');

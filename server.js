@@ -41,7 +41,7 @@ function generateFriendCode(name = '') {
 
 // --- Cloud / Local Data Storage Engine ---
 async function getDbData() {
-  let data = { users: [], messages: [] };
+  let data = { users: [], messages: [], rooms: [] };
 
   if (JSONBIN_BIN_ID && JSONBIN_API_KEY) {
     try {
@@ -51,6 +51,7 @@ async function getDbData() {
       const record = res.data.record || {};
       data.users = record.users || record.friends || [];
       data.messages = record.messages || [];
+      data.rooms = record.rooms || [];
     } catch (err) {
       console.error('Failed to read from JSONbin, falling back to local:', err.response?.data || err.message);
     }
@@ -61,10 +62,16 @@ async function getDbData() {
         const parsed = JSON.parse(raw);
         data.users = parsed.users || parsed.friends || [];
         data.messages = parsed.messages || [];
+        data.rooms = parsed.rooms || [];
       }
     } catch (err) {
       console.error('Failed to read local DB:', err.message);
     }
+  }
+
+  // Ensure default rooms exist if empty
+  if (!Array.isArray(data.rooms) || !data.rooms.length) {
+    data.rooms = [{ id: 'group', name: 'Group Lounge', createdBy: 'system' }];
   }
 
   // Ensure default structure on every user record
@@ -1030,6 +1037,46 @@ app.get('/api/chat/messages', async (req, res) => {
       .filter((m) => m.roomId === roomId || (!m.roomId && roomId === 'group'))
       .slice(-60);
     res.json(roomMessages);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// --- Custom Chat Rooms Endpoints ---
+app.get('/api/rooms', async (req, res) => {
+  try {
+    const data = await getDbData();
+    res.json(data.rooms || [{ id: 'group', name: 'Group Lounge', createdBy: 'system' }]);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/rooms', async (req, res) => {
+  try {
+    const { name } = req.body;
+    if (!name || !name.trim()) return res.status(400).json({ error: 'Room name is required' });
+
+    const currentUser = await getAuthenticatedUser(req);
+    if (!currentUser) return res.status(401).json({ error: 'Not authenticated' });
+
+    const data = await getDbData();
+    if (!data.rooms) data.rooms = [];
+
+    const newRoom = {
+      id: 'room_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7),
+      name: name.trim(),
+      createdBy: currentUser.spotifyId,
+      createdAt: new Date().toISOString()
+    };
+
+    data.rooms.push(newRoom);
+    await saveDbData(data);
+
+    // Broadcast new room creation to all connected sockets
+    io.emit('new_room', newRoom);
+
+    res.json(newRoom);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
