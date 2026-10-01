@@ -1494,9 +1494,32 @@
               <span>Connect Spotify</span>
             </button>
           </div>
+          <details style="margin-top:14px; text-align:left;">
+            <summary style="cursor:pointer; color: var(--text-muted);">Use YouTube Music instead</summary>
+            <p style="font-size:0.8rem; color: var(--text-dim); margin:8px 0;">On a computer: open music.youtube.com (logged in) &rarr; DevTools &rarr; Network &rarr; filter <b>browse</b> &rarr; click a POST request &rarr; copy its request headers &rarr; paste below. Stored encrypted on the server only.</p>
+            <input id="ytNameInput" class="input-field" placeholder="Your display name" />
+            <textarea id="ytConnectHeaders" class="input-field" rows="4" placeholder="Paste request headers"></textarea>
+            <button class="btn" style="margin-top:8px" onclick="connectYtMusic('ytConnectHeaders')">Connect YT Music</button>
+          </details>
         </div>
       `;
       if (window.lucide) lucide.createIcons();
+    }
+
+    async function connectYtMusic(textareaId) {
+      const headers = document.getElementById(textareaId)?.value || '';
+      const name = document.getElementById('ytNameInput')?.value || '';
+      if (!headers.trim()) return showToast('Paste your headers first.');
+      try {
+        const res = await fetch('/api/ytmusic/connect', {
+          method: 'POST', credentials: 'same-origin',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name, headers, ref: new URLSearchParams(location.search).get('ref') || '' }),
+        });
+        const out = await res.json();
+        if (!res.ok) return showToast(out.error || 'Could not connect.');
+        window.location.href = '/?connected=' + encodeURIComponent(name || 'YT Music');
+      } catch (e) { showToast('Network error, try again.'); }
     }
 
     function connectFromFeedCard() {
@@ -1641,16 +1664,16 @@
                 </div>
 
                 <div class="card-actions-toolbar">
-                  ${!isMe ? `
+                  ${!isMe && friend.source !== 'ytmusic' ? `
                     <button class="action-pill-btn sync-btn" onclick="syncPlayback('${friend.spotifyId}')">
                       <i data-lucide="radio" style="width: 13px; height: 13px;"></i>
                       <span>Listen Along</span>
                     </button>
                   ` : ''}
-                  <button class="action-pill-btn" onclick="queueTrack('${friend.uri}')">
+                  ${friend.source !== 'ytmusic' ? `<button class="action-pill-btn" onclick="queueTrack('${friend.uri}')">
                     <i data-lucide="list-plus" style="width: 13px; height: 13px;"></i>
                     <span>Queue</span>
-                  </button>
+                  </button>` : ''}
                   ${friend.previewUrl ? `
                     <button class="action-pill-btn" onclick="toggleAudioPreview('${friend.previewUrl}')">
                       <i data-lucide="volume-2" style="width: 13px; height: 13px;"></i>
@@ -1681,7 +1704,7 @@
           const album = escapeHTML(friend.album);
           const albumArt = friend.albumArt || '';
           const url = friend.spotifyUrl || '#';
-          const relativeTime = timeAgo(friend.playedAt);
+          const relativeTime = friend.playedAt ? timeAgo(friend.playedAt) : (friend.playedLabel ? friend.playedLabel.toLowerCase() : 'recently');
 
           return `
             <div class="friend-card card-offline" id="card-${friend.spotifyId}">
@@ -1729,7 +1752,12 @@
                 </div>
                 <span class="status-badge offline">Offline</span>
               </div>
-              <div style="color: var(--text-dim); font-size: 0.88rem; padding: 12px 0;">Not playing anything right now.</div>
+              ${friend.needsReconnect ? (friend.spotifyId === currentUser.spotifyId ? `
+              <div style="color: var(--text-dim); font-size: 0.88rem; padding: 12px 0;">Your YT Music login expired. Paste fresh headers:</div>
+              <textarea id="ytReconnectHeaders" class="input-field" rows="3" placeholder="Paste request headers"></textarea>
+              <button class="btn btn-sm" style="margin-top:8px" onclick="connectYtMusic('ytReconnectHeaders')">Reconnect YT Music</button>` : `
+              <div style="color: var(--text-dim); font-size: 0.88rem; padding: 12px 0;">YT Music needs reconnecting.</div>`) : `
+              <div style="color: var(--text-dim); font-size: 0.88rem; padding: 12px 0;">Not playing anything right now.</div>`}
             </div>
           </div>
         `;

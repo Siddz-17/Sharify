@@ -1,3 +1,6 @@
 node_modules/
 .env
 db.json
+__pycache__/
+*.pyc
+.DS_Store

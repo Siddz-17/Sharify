@@ -14,8 +14,11 @@ const {
   SPOTIFY_CLIENT_SECRET,
   REDIRECT_URI,
   PORT = 8888,
-  SESSION_SECRET = 'sharify-super-secret-key-2026',
+  SESSION_SECRET: ENV_SESSION_SECRET,
 } = process.env;
+const SESSION_SECRET = ENV_SESSION_SECRET || require('crypto').randomBytes(32).toString('hex');
+if (!ENV_SESSION_SECRET) console.warn('SESSION_SECRET not set: using a random one (logins reset on every restart).');
+const ytm = require('./ytmusic');
 
 if (!SPOTIFY_CLIENT_ID || !SPOTIFY_CLIENT_SECRET || !REDIRECT_URI) {
   console.error(
@@ -89,6 +92,8 @@ async function getDbData() {
     accessToken: u.accessToken,
     refreshToken: u.refreshToken,
     expiresAt: u.expiresAt || 0,
+    source: u.source || 'spotify',
+    ytAuthEnc: u.ytAuthEnc || '',
     topArtists: u.topArtists || [],
     topGenres: u.topGenres || [],
     createdAt: u.createdAt || new Date().toISOString(),
@@ -166,6 +171,7 @@ const SCOPES = [
 
 // --- Spotify Token Refresh Helper ---
 async function ensureFreshToken(user) {
+  if (user.source === 'ytmusic') throw new Error('Not available for YT Music users');
   if (Date.now() < (user.expiresAt || 0) - 30_000 && user.accessToken) {
     return user.accessToken;
   }
@@ -346,19 +352,14 @@ app.get('/callback', async (req, res) => {
     res.redirect(`/?connected=${encodeURIComponent(data.users[userIndex].name)}&userId=${encodeURIComponent(spotifyId)}`);
   } catch (err) {
     console.error('Error during Spotify Auth callback:', err.response?.data || err.message);
-    res.status(500).json({
-      message: 'Something went wrong connecting to Spotify.',
-      error: err.message,
-      details: err.response?.data || null,
-      stack: err.stack
-    });
+    res.status(500).json({ message: 'Something went wrong connecting to Spotify. Please try again.' });
   }
 });
 
 // Helper to get active user from session or header
 async function getAuthenticatedUser(req) {
   const data = await getDbData();
-  const sessionSpotifyId = req.session?.spotifyId || req.headers['x-spotify-user-id'] || req.query.currentUserId;
+  const sessionSpotifyId = req.session?.spotifyId;
   if (!sessionSpotifyId) return null;
   return data.users.find((u) => u.spotifyId === sessionSpotifyId) || null;
 }
@@ -434,7 +435,8 @@ app.put('/api/user/status', async (req, res) => {
         statusEmoji: data.users[idx].statusEmoji,
       });
 
-      return res.json({ success: true, user: data.users[idx] });
+      const { accessToken, refreshToken, ytAuthEnc, ...safeUser } = data.users[idx];
+      return res.json({ success: true, user: safeUser });
     }
     res.status(404).json({ error: 'User not found' });
   } catch (err) {
@@ -459,6 +461,7 @@ app.get('/api/feed', async (req, res) => {
 
     const feedResults = await Promise.all(
       targetUsers.map(async (user) => {
+        if (user.source === 'ytmusic') return ytm.getCard(user);
         try {
           const token = await ensureFreshToken(user);
           const nowPlayingRes = await axios.get(
@@ -554,6 +557,78 @@ app.get('/api/feed', async (req, res) => {
     console.error('Error constructing selective feed:', err);
     res.status(500).json({ error: 'Failed to generate feed' });
   }
+});
+
+
+// --- YouTube Music: connect / reconnect / disconnect ---
+const ytAttempts = new Map();
+function ytRateLimited(ip) {
+  const now = Date.now();
+  const hits = (ytAttempts.get(ip) || []).filter((t) => now - t < 60_000);
+  hits.push(now);
+  ytAttempts.set(ip, hits);
+  return hits.length > 5;
+}
+
+app.post('/api/ytmusic/connect', async (req, res) => {
+  try {
+    if (!ytm.enabled) return res.status(503).json({ error: 'YT Music is not enabled on this server.' });
+    if (ytRateLimited(req.ip)) return res.status(429).json({ error: 'Too many attempts. Try again in a minute.' });
+
+    const name = String(req.body.name || '').trim().slice(0, 30);
+    const ref = String(req.body.ref || '').trim();
+    const result = await ytm.connect(req.body.headers);
+    if (!result.ok) {
+      return res.status(400).json({ error: "Couldn't log in to YT Music with those headers. Copy a fresh request from music.youtube.com while logged in." });
+    }
+
+    const data = await getDbData();
+    const sessionId = req.session?.spotifyId;
+    let idx = data.users.findIndex((u) => u.spotifyId === sessionId && u.source === 'ytmusic');
+
+    if (idx > -1) {
+      data.users[idx].ytAuthEnc = result.authEnc; // reconnect
+    } else {
+      if (!name) return res.status(400).json({ error: 'Please enter your name.' });
+      const id = 'yt_' + crypto.randomBytes(8).toString('hex');
+      data.users.push({
+        spotifyId: id, name, spotifyProfileName: name, avatarUrl: '',
+        friendCode: generateFriendCode(name), friends: [], friendRequestsReceived: [], friendRequestsSent: [],
+        statusMessage: 'Just joined Sharify! 🎧', statusEmoji: '✨',
+        source: 'ytmusic', ytAuthEnc: result.authEnc, topArtists: [], topGenres: [],
+        createdAt: new Date().toISOString(),
+      });
+      idx = data.users.length - 1;
+      if (ref) {
+        const referrer = data.users.find((u) => u.friendCode.toLowerCase() === ref.toLowerCase() || u.spotifyId === ref);
+        if (referrer) {
+          if (!referrer.friends.includes(id)) referrer.friends.push(id);
+          data.users[idx].friends.push(referrer.spotifyId);
+        }
+      }
+    }
+
+    await saveDbData(data);
+    const user = data.users[idx];
+    ytm.seed(user.spotifyId, result.item);
+    req.session.spotifyId = user.spotifyId;
+    req.session.displayName = user.name;
+    res.json({ success: true, userId: user.spotifyId });
+  } catch (err) {
+    console.error('YT connect error:', err.message);
+    res.status(500).json({ error: 'Something went wrong connecting YT Music.' });
+  }
+});
+
+app.delete('/api/ytmusic/credentials', async (req, res) => {
+  const user = await getAuthenticatedUser(req);
+  if (!user || user.source !== 'ytmusic') return res.status(401).json({ error: 'Not authenticated' });
+  const data = await getDbData();
+  const u = data.users.find((x) => x.spotifyId === user.spotifyId);
+  u.ytAuthEnc = '';
+  await saveDbData(data);
+  ytm.forget(user.spotifyId);
+  res.json({ success: true });
 });
 
 app.get('/api/friends', (req, res) => {
@@ -1142,6 +1217,7 @@ io.on('connection', (socket) => {
 
 // Start HTTP + WebSocket Server
 server.listen(PORT, () => {
+  ytm.startPoller(getDbData);
   console.log(`\n========================================================`);
   console.log(`🎵 Sharify Realtime Server running at http://localhost:${PORT}`);
   console.log(`========================================================\n`);

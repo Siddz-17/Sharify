@@ -52,3 +52,10 @@ To share your local instance over the internet with friends:
 node tunnel.js
 ```
 Copy the generated tunnel URL and add `<tunnel_url>/callback` to your Spotify Developer Dashboard redirect URIs.
+
+---
+
+## 🎵 YouTube Music friends
+Friends without Spotify can join via **Use YouTube Music instead** on the welcome card: paste browser request headers once. Sharify stores them AES-256-GCM encrypted (server only) and checks their history every 60s, so their card shows the latest song ("last played" when it has finished). Listen Along, Queue, Taste Match and Blend are Spotify-only.
+
+Set `YTM_ENC_KEY` (e.g. `fly secrets set YTM_ENC_KEY=$(openssl rand -hex 32) SESSION_SECRET=$(openssl rand -hex 32)`). Requires Python 3 + `pip install -r ytm/requirements.txt` when running outside Docker.
