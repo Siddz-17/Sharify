@@ -8,7 +8,8 @@ const PY = process.env.PYTHON_BIN || 'python3';
 const SCRIPT = path.join(__dirname, 'ytm', 'history.py');
 const POLL_MS = 5_000;       // server-side poll cadence
 const PY_TIMEOUT = 8_000;   // kill Python if no response in 8s (well under poll interval)
-const MAX_FAILS = 5;         // more headroom before marking expired
+const MAX_AUTH_FAILS = 20;  // consecutive *genuine auth* failures before marking expired
+                             // ~100s of real 401/403s — network blips never count
 
 const enabled = !!process.env.YTM_ENC_KEY;
 const key = enabled ? crypto.createHash('sha256').update(process.env.YTM_ENC_KEY).digest() : null;
@@ -44,7 +45,7 @@ function runPy(payload) {
   });
 }
 
-// userId -> { item, firstSeenAt, fails, status, polling }
+// userId -> { item, firstSeenAt, authFails, netFails, status, polling }
 const cache = new Map();
 
 function clean(item) {
@@ -64,7 +65,7 @@ function record(userId, item) {
   // If prev.item is null/undefined (first boot or first poll), never claim "live" —
   // the song may have started arbitrarily long ago.
   if (prev?.item && it && prev.item.videoId !== it.videoId) firstSeenAt = Date.now();
-  cache.set(userId, { item: it, firstSeenAt, fails: 0, status: 'ok', polling: false });
+  cache.set(userId, { item: it, firstSeenAt, authFails: 0, netFails: 0, status: 'ok', polling: false });
 }
 
 // Validate pasted headers; returns { ok, authEnc, item } or { ok:false, error }
@@ -104,7 +105,7 @@ async function pollUser(u, io) {
   const entry = cache.get(u.spotifyId);
   if (entry?.polling) return; // this user's previous call still in flight
 
-  const prev = entry || { item: null, firstSeenAt: null, fails: 0, status: 'ok' };
+  const prev = entry || { item: null, firstSeenAt: null, authFails: 0, netFails: 0, status: 'ok' };
   cache.set(u.spotifyId, { ...prev, polling: true });
 
   let r;
@@ -120,9 +121,17 @@ async function pollUser(u, io) {
       io.emit('yt_track_changed', { spotifyId: u.spotifyId });
     }
   } else {
-    const fails = (now.fails || 0) + 1;
-    cache.set(u.spotifyId, { ...now, fails, polling: false, status: fails >= MAX_FAILS ? 'expired' : 'ok' });
-    if (r.error !== 'timeout') console.error(`YT poll failed for ${u.name} (${fails}/${MAX_FAILS}): ${r.error}`);
+    const authFails = (now.authFails || 0) + (r.authError ? 1 : 0);
+    const netFails  = (now.netFails  || 0) + (r.authError ? 0 : 1);
+    const expired   = authFails >= MAX_AUTH_FAILS;
+    cache.set(u.spotifyId, { ...now, authFails, netFails, polling: false,
+                             status: expired ? 'expired' : 'ok' });
+    if (r.authError) {
+      console.error(`YT auth failure for ${u.name} (${authFails}/${MAX_AUTH_FAILS}): ${r.error}`);
+    } else if (r.error !== 'timeout') {
+      // Network blip — debug level only, not a problem
+      console.debug && console.debug(`YT net blip for ${u.name} (netFails=${netFails}): ${r.error}`);
+    }
   }
 }
 
