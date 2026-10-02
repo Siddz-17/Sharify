@@ -1,4 +1,4 @@
-// YouTube Music support: encrypted credential storage + 15s history poller.
+// YouTube Music support: encrypted credential storage + 5s history poller.
 // Credentials never leave the server; the browser only ever sees feed cards.
 const crypto = require('crypto');
 const path = require('path');
@@ -6,7 +6,7 @@ const { spawn } = require('child_process');
 
 const PY = process.env.PYTHON_BIN || 'python3';
 const SCRIPT = path.join(__dirname, 'ytm', 'history.py');
-const POLL_MS = 15_000;
+const POLL_MS = 5_000;
 const MAX_FAILS = 3;
 
 const enabled = !!process.env.YTM_ENC_KEY;
