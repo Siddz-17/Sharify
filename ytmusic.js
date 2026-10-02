@@ -60,8 +60,10 @@ function record(userId, item) {
   const prev = cache.get(userId);
   const it = clean(item);
   let firstSeenAt = prev?.firstSeenAt ?? null;
-  // First poll after boot/connect: song may have started long ago, so don't claim "live".
-  if (prev && it && prev.item?.videoId !== it.videoId) firstSeenAt = Date.now();
+  // Only set firstSeenAt when a KNOWN previous song changes to a new one.
+  // If prev.item is null/undefined (first boot or first poll), never claim "live" —
+  // the song may have started arbitrarily long ago.
+  if (prev?.item && it && prev.item.videoId !== it.videoId) firstSeenAt = Date.now();
   cache.set(userId, { item: it, firstSeenAt, fails: 0, status: 'ok', polling: false });
 }
 
