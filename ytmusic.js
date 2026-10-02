@@ -82,10 +82,10 @@ function record(userId, item) {
 
   const isNewTrack = prev?.item && it && prev.item.videoId !== it.videoId;
   const playedMins = parsePlayedMinutes(it?.played);
-  const isRecentPlayback = playedMins <= 6; // Active if played within last 6 minutes
+  const isJustStarted = playedMins <= 2;
 
-  if (isNewTrack || (isRecentPlayback && (!firstSeenAt || (prev?.item && prev.item.played !== it.played)))) {
-    firstSeenAt = Date.now() - (playedMins < 6 && playedMins > 0 ? playedMins * 60_000 : 0);
+  if (isNewTrack || (isJustStarted && (!firstSeenAt || (prev?.item && prev.item.played !== it.played)))) {
+    firstSeenAt = Date.now() - (playedMins > 0 && playedMins <= 2 ? playedMins * 60_000 : 0);
   }
 
   cache.set(userId, { item: it, firstSeenAt, authFails: 0, netFails: 0, status: 'ok', polling: false });
@@ -113,20 +113,22 @@ function getCard(user) {
   if (!c || !c.item) return { ...base, lastPlayed: false };
 
   const it = c.item;
+  // Exact online song duration in milliseconds
   const durationMs = (it.durationSeconds || 210) * 1000;
   const card = {
     ...base, track: it.title, artists: it.artists, album: it.album, albumArt: it.albumArt,
     spotifyUrl: `https://music.youtube.com/watch?v=${it.videoId}`, durationMs,
   };
 
-  const playedMins = parsePlayedMinutes(it.played);
-  const isRecentPlayback = playedMins <= 6;
-  const isWithinDuration = c.firstSeenAt ? Date.now() - c.firstSeenAt < Math.max(durationMs + 60_000, 360_000) : false;
+  const isPlayedJustNow = it.played === 'Just now' || (it.played || '').includes('second') || (it.played || '').includes('1 minute');
 
-  if (isRecentPlayback || isWithinDuration) {
-    const elapsed = c.firstSeenAt ? Date.now() - c.firstSeenAt : 0;
-    const progressMs = Math.min(Math.max(0, elapsed), durationMs);
-    return { ...card, playing: true, progressMs, timestamp: Date.now() };
+  // Exact Song Duration logic: stay LIVE for the exact duration of the song (+ 15s buffer for poll latency)
+  if (c.firstSeenAt) {
+    const elapsed = Date.now() - c.firstSeenAt;
+    if (elapsed >= 0 && (elapsed < durationMs + 15_000 || isPlayedJustNow)) {
+      const progressMs = Math.min(elapsed, durationMs);
+      return { ...card, playing: true, progressMs, timestamp: Date.now() };
+    }
   }
 
   return { ...card, lastPlayed: true, playedAt: c.firstSeenAt ? new Date(c.firstSeenAt).toISOString() : null, playedLabel: it.played || '' };

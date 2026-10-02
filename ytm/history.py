@@ -47,8 +47,15 @@ def main():
                         dur = parts[0]*3600 + parts[1]*60 + parts[2]
                 except Exception:
                     pass
+            if not dur and h.get("videoId"):
+                try:
+                    song_data = YTMusic(auth).get_song(h["videoId"])
+                    vd = song_data.get("videoDetails", {})
+                    dur = int(vd.get("lengthSeconds") or 0)
+                except Exception:
+                    pass
             if not dur:
-                dur = 210  # Default 3m30s fallback if YT Music history did not supply duration
+                dur = 210  # Fallback 3m30s only if YT Music online lookup fails
             item = {
                 "videoId": h.get("videoId"),
                 "title": h.get("title") or "",
