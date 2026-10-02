@@ -70,12 +70,9 @@ function record(userId, item) {
   const prev = cache.get(userId);
   const it = clean(item);
   let firstSeenAt = prev?.firstSeenAt ?? null;
-  // Set firstSeenAt if:
-  // 1. A new track videoId is detected
-  // 2. The track was played "Just now" (including initial boot/connection while playing)
   const isNewTrack = prev?.item && it && prev.item.videoId !== it.videoId;
   const isJustNow = it && (it.played === 'Just now' || (it.played || '').includes('second') || (it.played || '').includes('minute'));
-  if (isNewTrack || (isJustNow && (!prev?.firstSeenAt || (prev.item && prev.item.played !== it.played)))) {
+  if (isNewTrack || !firstSeenAt || (isJustNow && (!prev?.firstSeenAt || (prev.item && prev.item.played !== it.played)))) {
     firstSeenAt = Date.now();
   }
   cache.set(userId, { item: it, firstSeenAt, authFails: 0, netFails: 0, status: 'ok', polling: false });
@@ -101,15 +98,23 @@ function getCard(user) {
   };
   if (!user.ytAuthEnc || c?.status === 'expired') return { ...base, lastPlayed: false, needsReconnect: true };
   if (!c || !c.item) return { ...base, lastPlayed: false };
+
   const it = c.item;
+  const durationMs = (it.durationSeconds || 210) * 1000;
   const card = {
     ...base, track: it.title, artists: it.artists, album: it.album, albumArt: it.albumArt,
-    spotifyUrl: `https://music.youtube.com/watch?v=${it.videoId}`, durationMs: it.durationSeconds * 1000,
+    spotifyUrl: `https://music.youtube.com/watch?v=${it.videoId}`, durationMs,
   };
-  const elapsed = c.firstSeenAt ? Date.now() - c.firstSeenAt : Infinity;
-  if (it.durationSeconds && elapsed < card.durationMs + 30_000) {
-    return { ...card, playing: true, progressMs: Math.min(elapsed, card.durationMs), timestamp: Date.now() };
+
+  const elapsed = c.firstSeenAt ? Date.now() - c.firstSeenAt : 0;
+  const isRecent = it.played === 'Just now' || (it.played || '').includes('second') || (it.played || '').includes('minute');
+  const isWithinDuration = elapsed < durationMs + 30_000;
+
+  if (isRecent || isWithinDuration) {
+    const progressMs = Math.min(Math.max(0, elapsed), durationMs);
+    return { ...card, playing: true, progressMs, timestamp: Date.now() };
   }
+
   return { ...card, lastPlayed: true, playedAt: c.firstSeenAt ? new Date(c.firstSeenAt).toISOString() : null, playedLabel: it.played || '' };
 }
 

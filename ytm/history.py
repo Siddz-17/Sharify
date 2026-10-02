@@ -37,13 +37,25 @@ def main():
         if hist:
             h = hist[0]
             thumbs = h.get("thumbnails") or []
+            dur = h.get("duration_seconds") or 0
+            if not dur and h.get("duration"):
+                try:
+                    parts = [int(p) for p in str(h["duration"]).split(":")]
+                    if len(parts) == 2:
+                        dur = parts[0]*60 + parts[1]
+                    elif len(parts) == 3:
+                        dur = parts[0]*3600 + parts[1]*60 + parts[2]
+                except Exception:
+                    pass
+            if not dur:
+                dur = 210  # Default 3m30s fallback if YT Music history did not supply duration
             item = {
                 "videoId": h.get("videoId"),
                 "title": h.get("title") or "",
                 "artists": ", ".join(a.get("name", "") for a in (h.get("artists") or [])),
                 "album": (h.get("album") or {}).get("name", ""),
                 "albumArt": thumbs[-1].get("url", "") if thumbs else "",
-                "durationSeconds": h.get("duration_seconds") or 0,
+                "durationSeconds": dur,
                 "played": h.get("played") or "",
             }
         out = {"ok": True, "item": item}
