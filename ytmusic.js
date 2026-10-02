@@ -1,4 +1,4 @@
-// YouTube Music support: encrypted credential storage + 5s history poller.
+// YouTube Music support: encrypted credential storage + fast parallel poller.
 // Credentials never leave the server; the browser only ever sees feed cards.
 const crypto = require('crypto');
 const path = require('path');
@@ -6,8 +6,9 @@ const { spawn } = require('child_process');
 
 const PY = process.env.PYTHON_BIN || 'python3';
 const SCRIPT = path.join(__dirname, 'ytm', 'history.py');
-const POLL_MS = 5_000;
-const MAX_FAILS = 3;
+const POLL_MS = 5_000;       // server-side poll cadence
+const PY_TIMEOUT = 8_000;   // kill Python if no response in 8s (well under poll interval)
+const MAX_FAILS = 5;         // more headroom before marking expired
 
 const enabled = !!process.env.YTM_ENC_KEY;
 const key = enabled ? crypto.createHash('sha256').update(process.env.YTM_ENC_KEY).digest() : null;
@@ -30,7 +31,7 @@ function runPy(payload) {
   return new Promise((resolve) => {
     const p = spawn(PY, [SCRIPT], { stdio: ['pipe', 'pipe', 'ignore'] });
     let out = '';
-    const timer = setTimeout(() => p.kill(), 20_000);
+    const timer = setTimeout(() => { p.kill(); resolve({ ok: false, error: 'timeout' }); }, PY_TIMEOUT);
     p.stdout.on('data', (d) => (out += d));
     p.on('error', (e) => { clearTimeout(timer); resolve({ ok: false, error: e.message }); });
     p.on('close', () => {
@@ -43,7 +44,7 @@ function runPy(payload) {
   });
 }
 
-// userId -> { item, firstSeenAt, fails, status }
+// userId -> { item, firstSeenAt, fails, status, polling }
 const cache = new Map();
 
 function clean(item) {
@@ -61,7 +62,7 @@ function record(userId, item) {
   let firstSeenAt = prev?.firstSeenAt ?? null;
   // First poll after boot/connect: song may have started long ago, so don't claim "live".
   if (prev && it && prev.item?.videoId !== it.videoId) firstSeenAt = Date.now();
-  cache.set(userId, { item: it, firstSeenAt, fails: 0, status: 'ok' });
+  cache.set(userId, { item: it, firstSeenAt, fails: 0, status: 'ok', polling: false });
 }
 
 // Validate pasted headers; returns { ok, authEnc, item } or { ok:false, error }
@@ -96,32 +97,47 @@ function getCard(user) {
   return { ...card, lastPlayed: true, playedAt: c.firstSeenAt ? new Date(c.firstSeenAt).toISOString() : null, playedLabel: it.played || '' };
 }
 
-let polling = false;
-async function pollOnce(getDbData) {
-  if (polling) return;
-  polling = true;
-  try {
-    const { users } = await getDbData();
-    for (const u of users) {
-      if (u.source !== 'ytmusic' || !u.ytAuthEnc || cache.get(u.spotifyId)?.status === 'expired') continue;
-      let r;
-      try { r = await runPy({ auth: decrypt(u.ytAuthEnc) }); } catch { r = { ok: false }; }
-      if (r.ok) record(u.spotifyId, r.item);
-      else {
-        const prev = cache.get(u.spotifyId) || { item: null, firstSeenAt: null, fails: 0 };
-        const fails = prev.fails + 1;
-        cache.set(u.spotifyId, { ...prev, fails, status: fails >= MAX_FAILS ? 'expired' : 'ok' });
-        console.error(`YT poll failed for ${u.name} (${fails}/${MAX_FAILS})`);
-      }
+// Poll a single user — per-user lock so users don't block each other
+async function pollUser(u, io) {
+  const entry = cache.get(u.spotifyId);
+  if (entry?.polling) return; // this user's previous call still in flight
+
+  const prev = entry || { item: null, firstSeenAt: null, fails: 0, status: 'ok' };
+  cache.set(u.spotifyId, { ...prev, polling: true });
+
+  let r;
+  try { r = await runPy({ auth: decrypt(u.ytAuthEnc) }); } catch { r = { ok: false }; }
+
+  const now = cache.get(u.spotifyId) || { ...prev };
+  if (r.ok) {
+    const oldId = now.item?.videoId;
+    record(u.spotifyId, r.item);
+    const newId = cache.get(u.spotifyId)?.item?.videoId;
+    // Push to clients immediately if song changed
+    if (io && oldId !== newId && newId) {
+      io.emit('yt_track_changed', { spotifyId: u.spotifyId });
     }
-  } catch (e) { console.error('YT poll error:', e.message); }
-  finally { polling = false; }
+  } else {
+    const fails = (now.fails || 0) + 1;
+    cache.set(u.spotifyId, { ...now, fails, polling: false, status: fails >= MAX_FAILS ? 'expired' : 'ok' });
+    if (r.error !== 'timeout') console.error(`YT poll failed for ${u.name} (${fails}/${MAX_FAILS}): ${r.error}`);
+  }
 }
 
-function startPoller(getDbData) {
+function startPoller(getDbData, io) {
   if (!enabled) return console.warn('YT Music disabled: set YTM_ENC_KEY to enable.');
-  pollOnce(getDbData);
-  setInterval(() => pollOnce(getDbData), POLL_MS);
+
+  const tick = async () => {
+    try {
+      const { users } = await getDbData();
+      const ytUsers = users.filter((u) => u.source === 'ytmusic' && u.ytAuthEnc && cache.get(u.spotifyId)?.status !== 'expired');
+      // Fire all user polls concurrently — per-user locks prevent pile-up
+      await Promise.allSettled(ytUsers.map((u) => pollUser(u, io)));
+    } catch (e) { console.error('YT poll tick error:', e.message); }
+  };
+
+  tick(); // immediate first poll
+  setInterval(tick, POLL_MS);
 }
 
 module.exports = { enabled, connect, seed, forget, getCard, startPoller, runPy, encrypt, decrypt };

@@ -1742,7 +1742,7 @@ setInterval(loadUsers, 30000); // auto-refresh every 30s
 
 // Start HTTP + WebSocket Server
 server.listen(PORT, () => {
-  ytm.startPoller(getDbData);
+  ytm.startPoller(getDbData, io);
   console.log(`\n========================================================`);
   console.log(`🎵 Sharify Realtime Server running at http://localhost:${PORT}`);
   console.log(`========================================================\n`);
