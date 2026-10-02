@@ -88,7 +88,7 @@ async function getDbData() {
     friendRequestsReceived: Array.isArray(u.friendRequestsReceived) ? u.friendRequestsReceived : [],
     friendRequestsSent: Array.isArray(u.friendRequestsSent) ? u.friendRequestsSent : [],
     statusMessage: u.statusMessage || '',
-    statusEmoji: u.statusEmoji || '🎧',
+    statusEmoji: u.statusEmoji || '\uD83C\uDFA7',
     accessToken: u.accessToken,
     refreshToken: u.refreshToken,
     expiresAt: u.expiresAt || 0,
@@ -97,6 +97,7 @@ async function getDbData() {
     topArtists: u.topArtists || [],
     topGenres: u.topGenres || [],
     createdAt: u.createdAt || new Date().toISOString(),
+    banned: u.banned || false,
   }));
 
   return data;
@@ -346,6 +347,11 @@ app.get('/callback', async (req, res) => {
 
     await saveDbData(data);
 
+    // Ban check — prevent banned users from getting a session
+    if (data.users[userIndex].banned) {
+      return res.status(403).send('Your access to Sharify has been restricted. Contact the admin.');
+    }
+
     req.session.spotifyId = spotifyId;
     req.session.displayName = data.users[userIndex].name;
 
@@ -367,7 +373,9 @@ async function getAuthenticatedUser(req) {
   const data = await getDbData();
   const sessionSpotifyId = req.session?.spotifyId;
   if (!sessionSpotifyId) return null;
-  return data.users.find((u) => u.spotifyId === sessionSpotifyId) || null;
+  const user = data.users.find((u) => u.spotifyId === sessionSpotifyId) || null;
+  if (user?.banned) return null; // banned users are treated as unauthenticated
+  return user;
 }
 
 // --- Current User Profile & Friends Endpoint ---
@@ -1353,6 +1361,301 @@ io.on('connection', (socket) => {
       id: 'react_' + Date.now() + '_' + Math.random().toString(36).substring(2, 5),
     });
   });
+});
+
+// ============================================================
+// ADMIN DASHBOARD — gated by ADMIN_KEY
+// ============================================================
+const ADMIN_KEY = process.env.ADMIN_KEY || 'siddharth-admin-default';
+
+function requireAdmin(req, res, next) {
+  if (req.session?.isAdmin) return next();
+  res.redirect('/admin/login');
+}
+
+app.get('/admin/login', (req, res) => {
+  const err = req.query.error ? '<p style="color:#f87171;font-size:0.85rem;margin-bottom:12px;">// INCORRECT KEY — TRY AGAIN</p>' : '';
+  res.send(`<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Sharify Admin</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>*{box-sizing:border-box;margin:0;padding:0}body{background:#000;color:#fff;font-family:'JetBrains Mono',monospace;display:flex;align-items:center;justify-content:center;min-height:100vh;background-image:radial-gradient(rgba(255,255,255,0.04) 1px,transparent 1px);background-size:20px 20px}.box{border:1px solid #2a2a2a;padding:40px;max-width:360px;width:100%}h1{font-size:1rem;letter-spacing:.2em;margin-bottom:8px;text-transform:uppercase}p.sub{color:#555;font-size:.75rem;margin-bottom:28px;letter-spacing:.1em}input{width:100%;background:#0a0a0a;border:1px solid #2a2a2a;color:#fff;padding:10px 14px;font-family:inherit;font-size:.85rem;letter-spacing:.1em;margin-bottom:14px;outline:none}input:focus{border-color:#fff}button{width:100%;background:#fff;color:#000;border:none;padding:11px;font-family:inherit;font-size:.8rem;font-weight:600;letter-spacing:.15em;text-transform:uppercase;cursor:pointer}button:hover{background:#e0e0e0}</style></head>
+<body><div class="box"><h1>// SHARIFY ADMIN</h1><p class="sub">RESTRICTED ACCESS — AUTHORISED PERSONNEL ONLY</p>
+${err}<form method="POST" action="/admin/login"><input type="password" name="key" placeholder="ENTER ADMIN KEY" autofocus /><button type="submit">[ AUTHENTICATE ]</button></form></div></body></html>`);
+});
+
+app.use('/admin/login', express.urlencoded({ extended: false }));
+app.post('/admin/login', express.urlencoded({ extended: false }), (req, res) => {
+  if ((req.body.key || '').trim() === ADMIN_KEY) {
+    req.session.isAdmin = true;
+    res.redirect('/admin');
+  } else {
+    res.redirect('/admin/login?error=1');
+  }
+});
+
+app.get('/admin/logout', (req, res) => {
+  req.session.isAdmin = false;
+  res.redirect('/admin/login');
+});
+
+// --- Admin API ---
+app.get('/api/admin/users', requireAdmin, async (req, res) => {
+  const data = await getDbData();
+  res.json(data.users.map((u) => ({
+    spotifyId: u.spotifyId,
+    name: u.name,
+    source: u.source || 'spotify',
+    avatarUrl: u.avatarUrl || '',
+    friendCode: u.friendCode,
+    friendCount: u.friends?.length || 0,
+    createdAt: u.createdAt,
+    banned: u.banned || false,
+    statusMessage: u.statusMessage,
+    statusEmoji: u.statusEmoji,
+  })));
+});
+
+app.post('/api/admin/users/:id/ban', requireAdmin, async (req, res) => {
+  const data = await getDbData();
+  const u = data.users.find((x) => x.spotifyId === req.params.id);
+  if (!u) return res.status(404).json({ error: 'User not found' });
+  u.banned = true;
+  await saveDbData(data);
+  res.json({ success: true, name: u.name });
+});
+
+app.post('/api/admin/users/:id/unban', requireAdmin, async (req, res) => {
+  const data = await getDbData();
+  const u = data.users.find((x) => x.spotifyId === req.params.id);
+  if (!u) return res.status(404).json({ error: 'User not found' });
+  u.banned = false;
+  await saveDbData(data);
+  res.json({ success: true, name: u.name });
+});
+
+app.delete('/api/admin/users/:id', requireAdmin, async (req, res) => {
+  const data = await getDbData();
+  const idx = data.users.findIndex((x) => x.spotifyId === req.params.id);
+  if (idx === -1) return res.status(404).json({ error: 'User not found' });
+  const name = data.users[idx].name;
+  data.users.splice(idx, 1);
+  // Remove all references to this user
+  data.users.forEach((u) => {
+    u.friends = u.friends.filter((id) => id !== req.params.id);
+    u.friendRequestsSent = u.friendRequestsSent.filter((id) => id !== req.params.id);
+    u.friendRequestsReceived = u.friendRequestsReceived.filter((r) => r.fromSpotifyId !== req.params.id);
+  });
+  await saveDbData(data);
+  res.json({ success: true, name });
+});
+
+// --- Admin Dashboard Page ---
+app.get('/admin', requireAdmin, async (req, res) => {
+  res.send(`<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Sharify // Admin Console</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#000;color:#fff;font-family:'Inter',-apple-system,sans-serif;min-height:100vh;background-image:radial-gradient(rgba(255,255,255,0.03) 1px,transparent 1px);background-size:20px 20px}
+.mono{font-family:'JetBrains Mono',monospace}
+header{border-bottom:1px solid #1a1a1a;padding:16px 28px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;background:#000;z-index:10}
+.logo{font-family:'JetBrains Mono',monospace;font-size:.9rem;letter-spacing:.25em;text-transform:uppercase;color:#fff}
+.logo span{color:#555}
+.header-actions{display:flex;align-items:center;gap:12px}
+.badge{background:#111;border:1px solid #2a2a2a;padding:4px 10px;font-family:'JetBrains Mono',monospace;font-size:.7rem;letter-spacing:.12em;text-transform:uppercase;color:#888}
+.btn-sm{background:transparent;border:1px solid #2a2a2a;color:#888;padding:5px 12px;font-family:'JetBrains Mono',monospace;font-size:.7rem;letter-spacing:.12em;text-transform:uppercase;cursor:pointer;transition:all .15s}
+.btn-sm:hover{border-color:#fff;color:#fff}
+.btn-danger{border-color:#7f1d1d;color:#f87171}
+.btn-danger:hover{background:#7f1d1d;color:#fff;border-color:#7f1d1d}
+.btn-warn{border-color:#78350f;color:#fbbf24}
+.btn-warn:hover{background:#78350f;color:#fff;border-color:#78350f}
+.btn-ok{border-color:#14532d;color:#4ade80}
+.btn-ok:hover{background:#14532d;color:#fff;border-color:#14532d}
+main{padding:28px;max-width:1200px;margin:0 auto}
+.stats-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:14px;margin-bottom:28px}
+.stat-card{border:1px solid #1a1a1a;padding:18px;background:#050505}
+.stat-val{font-family:'JetBrains Mono',monospace;font-size:2rem;font-weight:700;margin-bottom:4px}
+.stat-label{font-size:.72rem;color:#555;text-transform:uppercase;letter-spacing:.12em;font-family:'JetBrains Mono',monospace}
+.stat-card.spotify .stat-val{color:#1db954}
+.stat-card.yt .stat-val{color:#ff0000}
+.stat-card.banned .stat-val{color:#f87171}
+.section-title{font-family:'JetBrains Mono',monospace;font-size:.75rem;letter-spacing:.2em;text-transform:uppercase;color:#444;margin-bottom:14px;padding-bottom:10px;border-bottom:1px solid #111}
+.toolbar{display:flex;align-items:center;gap:10px;margin-bottom:16px;flex-wrap:wrap}
+input.search{background:#0a0a0a;border:1px solid #1a1a1a;color:#fff;padding:8px 14px;font-family:'JetBrains Mono',monospace;font-size:.8rem;letter-spacing:.08em;outline:none;flex:1;min-width:200px}
+input.search:focus{border-color:#333}
+select.filter{background:#0a0a0a;border:1px solid #1a1a1a;color:#888;padding:8px 12px;font-family:'JetBrains Mono',monospace;font-size:.78rem;letter-spacing:.08em;outline:none;cursor:pointer}
+table{width:100%;border-collapse:collapse}
+th{text-align:left;font-family:'JetBrains Mono',monospace;font-size:.68rem;letter-spacing:.15em;text-transform:uppercase;color:#444;padding:10px 14px;border-bottom:1px solid #111;white-space:nowrap}
+td{padding:12px 14px;border-bottom:1px solid #0d0d0d;vertical-align:middle;font-size:.85rem}
+tr:hover td{background:#050505}
+.avatar{width:32px;height:32px;border-radius:50%;object-fit:cover;border:1px solid #1a1a1a;background:#111;display:inline-flex;align-items:center;justify-content:center;font-size:.8rem;vertical-align:middle;margin-right:8px}
+.name-cell{display:flex;align-items:center;gap:0}
+.source-badge{font-family:'JetBrains Mono',monospace;font-size:.62rem;padding:2px 7px;letter-spacing:.1em;text-transform:uppercase;border:1px solid;display:inline-block}
+.source-spotify{color:#1db954;border-color:#14532d}
+.source-yt{color:#f87171;border-color:#7f1d1d}
+.ban-badge{font-family:'JetBrains Mono',monospace;font-size:.62rem;padding:2px 7px;letter-spacing:.1em;text-transform:uppercase;border:1px solid #7f1d1d;color:#f87171;display:inline-block}
+.active-badge{font-family:'JetBrains Mono',monospace;font-size:.62rem;padding:2px 7px;letter-spacing:.1em;text-transform:uppercase;border:1px solid #14532d;color:#4ade80;display:inline-block}
+.actions{display:flex;gap:6px;flex-wrap:wrap}
+.empty{text-align:center;padding:48px;color:#333;font-family:'JetBrains Mono',monospace;font-size:.8rem;letter-spacing:.12em}
+.toast{position:fixed;bottom:24px;right:24px;background:#fff;color:#000;padding:10px 18px;font-family:'JetBrains Mono',monospace;font-size:.78rem;letter-spacing:.1em;opacity:0;transition:opacity .3s;pointer-events:none;z-index:999}
+.toast.show{opacity:1}
+@media(max-width:700px){th:nth-child(4),td:nth-child(4),th:nth-child(5),td:nth-child(5){display:none}}
+</style>
+</head>
+<body>
+<header>
+  <div class="logo">SHARIFY <span>//</span> ADMIN CONSOLE</div>
+  <div class="header-actions">
+    <span class="badge" id="totalBadge">LOADING...</span>
+    <a href="/" class="btn-sm">[ BACK TO APP ]</a>
+    <a href="/admin/logout" class="btn-sm">[ LOGOUT ]</a>
+  </div>
+</header>
+<main>
+  <div class="stats-row">
+    <div class="stat-card"><div class="stat-val" id="statTotal">—</div><div class="stat-label">Total Users</div></div>
+    <div class="stat-card spotify"><div class="stat-val" id="statSpotify">—</div><div class="stat-label">Spotify</div></div>
+    <div class="stat-card yt"><div class="stat-val" id="statYt">—</div><div class="stat-label">YT Music</div></div>
+    <div class="stat-card banned"><div class="stat-val" id="statBanned">—</div><div class="stat-label">Banned</div></div>
+  </div>
+
+  <div class="section-title">// USER REGISTRY</div>
+  <div class="toolbar">
+    <input class="search" id="searchInput" placeholder="FILTER BY NAME OR CODE..." oninput="renderTable()" />
+    <select class="filter" id="filterSource" onchange="renderTable()">
+      <option value="">ALL SOURCES</option>
+      <option value="spotify">SPOTIFY</option>
+      <option value="ytmusic">YT MUSIC</option>
+    </select>
+    <select class="filter" id="filterStatus" onchange="renderTable()">
+      <option value="">ALL STATUS</option>
+      <option value="active">ACTIVE</option>
+      <option value="banned">BANNED</option>
+    </select>
+    <button class="btn-sm" onclick="loadUsers()">[ REFRESH ]</button>
+  </div>
+  <table>
+    <thead><tr>
+      <th>User</th><th>Source</th><th>Friends</th><th>Joined</th><th>Status</th><th>Actions</th>
+    </tr></thead>
+    <tbody id="userTableBody"><tr><td colspan="6" class="empty">// LOADING REGISTRY...</td></tr></tbody>
+  </table>
+</main>
+<div class="toast" id="toast"></div>
+
+<script>
+let allUsers = [];
+
+async function loadUsers() {
+  try {
+    const res = await fetch('/api/admin/users');
+    if (!res.ok) { location.href = '/admin/login'; return; }
+    allUsers = await res.json();
+    updateStats();
+    renderTable();
+  } catch(e) { showToast('Failed to load users'); }
+}
+
+function updateStats() {
+  document.getElementById('statTotal').textContent = allUsers.length;
+  document.getElementById('statSpotify').textContent = allUsers.filter(u => u.source === 'spotify').length;
+  document.getElementById('statYt').textContent = allUsers.filter(u => u.source === 'ytmusic').length;
+  document.getElementById('statBanned').textContent = allUsers.filter(u => u.banned).length;
+  document.getElementById('totalBadge').textContent = allUsers.length + ' USERS';
+}
+
+function renderTable() {
+  const q = document.getElementById('searchInput').value.toLowerCase();
+  const srcFilter = document.getElementById('filterSource').value;
+  const statusFilter = document.getElementById('filterStatus').value;
+
+  let filtered = allUsers.filter(u => {
+    if (q && !u.name.toLowerCase().includes(q) && !u.friendCode.toLowerCase().includes(q)) return false;
+    if (srcFilter && u.source !== srcFilter) return false;
+    if (statusFilter === 'banned' && !u.banned) return false;
+    if (statusFilter === 'active' && u.banned) return false;
+    return true;
+  });
+
+  const tbody = document.getElementById('userTableBody');
+  if (!filtered.length) {
+    tbody.innerHTML = '<tr><td colspan="6" class="empty">// NO USERS MATCH FILTER</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = filtered.map(u => {
+    const avatar = u.avatarUrl
+      ? \`<img class="avatar" src="\${u.avatarUrl}" alt="" />\`
+      : \`<span class="avatar">\${u.name.slice(0,1).toUpperCase()}</span>\`;
+    const srcBadge = u.source === 'ytmusic'
+      ? '<span class="source-badge source-yt">YT</span>'
+      : '<span class="source-badge source-spotify">SPOTIFY</span>';
+    const statusBadge = u.banned
+      ? '<span class="ban-badge">BANNED</span>'
+      : '<span class="active-badge">ACTIVE</span>';
+    const joined = u.createdAt ? new Date(u.createdAt).toLocaleDateString('en-GB', {day:'2-digit',month:'short',year:'numeric'}) : '—';
+    const banBtn = u.banned
+      ? \`<button class="btn-sm btn-ok" onclick="unbanUser('\${u.spotifyId}','\${esc(u.name)}')">[ UNBAN ]</button>\`
+      : \`<button class="btn-sm btn-warn" onclick="banUser('\${u.spotifyId}','\${esc(u.name)}')">[ BAN ]</button>\`;
+    return \`<tr id="row-\${u.spotifyId}">
+      <td><div class="name-cell">\${avatar}<span style="font-weight:500">\${esc(u.name)}</span><span style="color:#333;font-size:.72rem;margin-left:8px;font-family:monospace">\${u.friendCode}</span></div></td>
+      <td>\${srcBadge}</td>
+      <td style="font-family:monospace;color:#555">\${u.friendCount}</td>
+      <td style="font-family:monospace;color:#555;font-size:.8rem">\${joined}</td>
+      <td>\${statusBadge}</td>
+      <td><div class="actions">
+        \${banBtn}
+        <button class="btn-sm btn-danger" onclick="removeUser('\${u.spotifyId}','\${esc(u.name)}')">[ REMOVE ]</button>
+      </div></td>
+    </tr>\`;
+  }).join('');
+}
+
+function esc(s) { return String(s).replace(/'/g,"&#39;").replace(/"/g,'&quot;'); }
+
+async function banUser(id, name) {
+  if (!confirm('Ban ' + name + '? They will lose app access immediately.')) return;
+  const res = await fetch('/api/admin/users/' + id + '/ban', { method: 'POST' });
+  const d = await res.json();
+  if (!res.ok) return showToast(d.error || 'Error');
+  showToast(name + ' banned.');
+  allUsers = allUsers.map(u => u.spotifyId === id ? {...u, banned: true} : u);
+  updateStats(); renderTable();
+}
+
+async function unbanUser(id, name) {
+  if (!confirm('Unban ' + name + '? They will regain access.')) return;
+  const res = await fetch('/api/admin/users/' + id + '/unban', { method: 'POST' });
+  const d = await res.json();
+  if (!res.ok) return showToast(d.error || 'Error');
+  showToast(name + ' unbanned.');
+  allUsers = allUsers.map(u => u.spotifyId === id ? {...u, banned: false} : u);
+  updateStats(); renderTable();
+}
+
+async function removeUser(id, name) {
+  if (!confirm('Permanently remove ' + name + '? This cannot be undone.')) return;
+  const res = await fetch('/api/admin/users/' + id, { method: 'DELETE' });
+  const d = await res.json();
+  if (!res.ok) return showToast(d.error || 'Error');
+  showToast(name + ' removed.');
+  allUsers = allUsers.filter(u => u.spotifyId !== id);
+  updateStats(); renderTable();
+}
+
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 3000);
+}
+
+loadUsers();
+setInterval(loadUsers, 30000); // auto-refresh every 30s
+</script>
+</body></html>`);
 });
 
 // Start HTTP + WebSocket Server
