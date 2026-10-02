@@ -827,7 +827,9 @@ app.post('/api/ytmusic/connect', async (req, res) => {
     const ref = String(req.body.ref || '').trim();
     const result = await ytm.connect(req.body.headers);
     if (!result.ok) {
-      return res.status(400).json({ error: "Couldn't log in to YT Music with those headers. Copy a fresh request from music.youtube.com while logged in." });
+      return res.status(400).json({
+        error: result.error ? `YT Music connection failed: ${result.error}` : "Couldn't log in to YT Music with those headers. Copy a fresh request from music.youtube.com while logged in."
+      });
     }
 
     const data = await getDbData();

@@ -4,15 +4,16 @@ const crypto = require('crypto');
 const path = require('path');
 const { spawn } = require('child_process');
 
-const PY = process.env.PYTHON_BIN || 'python3';
+const PY = process.env.PYTHON_BIN || (process.platform === 'win32' ? 'py' : 'python3');
 const SCRIPT = path.join(__dirname, 'ytm', 'history.py');
 const POLL_MS = 5_000;       // server-side poll cadence
 const PY_TIMEOUT = 8_000;   // kill Python if no response in 8s (well under poll interval)
 const MAX_AUTH_FAILS = 20;  // consecutive *genuine auth* failures before marking expired
                              // ~100s of real 401/403s — network blips never count
 
-const enabled = !!process.env.YTM_ENC_KEY;
-const key = enabled ? crypto.createHash('sha256').update(process.env.YTM_ENC_KEY).digest() : null;
+const encSecret = process.env.YTM_ENC_KEY || 'sharify-default-ytm-encryption-secret-key-2026';
+const enabled = true;
+const key = crypto.createHash('sha256').update(encSecret).digest();
 
 function encrypt(text) {
   const iv = crypto.randomBytes(12);
@@ -30,15 +31,23 @@ function decrypt(s) {
 
 function runPy(payload) {
   return new Promise((resolve) => {
-    const p = spawn(PY, [SCRIPT], { stdio: ['pipe', 'pipe', 'ignore'] });
+    const p = spawn(PY, [SCRIPT], { stdio: ['pipe', 'pipe', 'pipe'] });
     let out = '';
-    const timer = setTimeout(() => { p.kill(); resolve({ ok: false, error: 'timeout' }); }, PY_TIMEOUT);
+    let errOut = '';
+    const timer = setTimeout(() => { p.kill(); resolve({ ok: false, error: 'YT Music helper timed out (8s limit)' }); }, PY_TIMEOUT);
     p.stdout.on('data', (d) => (out += d));
-    p.on('error', (e) => { clearTimeout(timer); resolve({ ok: false, error: e.message }); });
+    p.stderr.on('data', (d) => (errOut += d));
+    p.on('error', (e) => { clearTimeout(timer); resolve({ ok: false, error: `Python spawn error (${PY}): ${e.message}` }); });
     p.on('close', () => {
       clearTimeout(timer);
-      try { resolve(JSON.parse(out.trim().split('\n').pop())); }
-      catch { resolve({ ok: false, error: 'No valid response from YT Music helper' }); }
+      try {
+        const line = out.trim().split('\n').pop();
+        if (!line) throw new Error('Empty response');
+        resolve(JSON.parse(line));
+      } catch (err) {
+        const errorMsg = errOut.trim() || out.trim() || 'No valid response from YT Music helper';
+        resolve({ ok: false, error: errorMsg });
+      }
     });
     p.stdin.on('error', () => {});
     p.stdin.end(JSON.stringify(payload));
@@ -61,10 +70,14 @@ function record(userId, item) {
   const prev = cache.get(userId);
   const it = clean(item);
   let firstSeenAt = prev?.firstSeenAt ?? null;
-  // Only set firstSeenAt when a KNOWN previous song changes to a new one.
-  // If prev.item is null/undefined (first boot or first poll), never claim "live" —
-  // the song may have started arbitrarily long ago.
-  if (prev?.item && it && prev.item.videoId !== it.videoId) firstSeenAt = Date.now();
+  // Set firstSeenAt if:
+  // 1. A new track videoId is detected
+  // 2. The track was played "Just now" (including initial boot/connection while playing)
+  const isNewTrack = prev?.item && it && prev.item.videoId !== it.videoId;
+  const isJustNow = it && (it.played === 'Just now' || (it.played || '').includes('second') || (it.played || '').includes('minute'));
+  if (isNewTrack || (isJustNow && (!prev?.firstSeenAt || (prev.item && prev.item.played !== it.played)))) {
+    firstSeenAt = Date.now();
+  }
   cache.set(userId, { item: it, firstSeenAt, authFails: 0, netFails: 0, status: 'ok', polling: false });
 }
 
@@ -109,7 +122,12 @@ async function pollUser(u, io) {
   cache.set(u.spotifyId, { ...prev, polling: true });
 
   let r;
-  try { r = await runPy({ auth: decrypt(u.ytAuthEnc) }); } catch { r = { ok: false }; }
+  try {
+    const rawAuth = decrypt(u.ytAuthEnc);
+    r = await runPy({ auth: rawAuth });
+  } catch (err) {
+    r = { ok: false, authError: true, error: `Decryption error (reconnect needed): ${err.message}` };
+  }
 
   const now = cache.get(u.spotifyId) || { ...prev };
   if (r.ok) {
