@@ -1387,7 +1387,7 @@
       <button class="modal-close" onclick="closeAvatarModal()"><i data-lucide="x" style="width: 14px; height: 14px;"></i></button>
       <div class="panel-title-lg" style="margin-bottom: 6px;">
         <i data-lucide="camera"></i>
-        <span>// CHANGE PROFILE PICTURE</span>
+        <span id="avatarModalTitle">// CHANGE PROFILE PICTURE</span>
       </div>
       <p style="color: var(--secondary); font-size: 0.78rem; margin-bottom: 18px; font-family: var(--font-mono);">Upload an image or paste a direct URL. Max 2 MB for uploads.</p>
 
@@ -1649,12 +1649,12 @@
           <i data-lucide="smartphone" style="width: 13px; height: 13px;"></i>
           <span style="display: none; font-size: 0.7rem;" class="device-btn-label">[ SIGN IN ON DEVICE ]</span>
         </button>
-        <div class="user-pill" onclick="switchTab('profile')" title="View Profile" style="cursor:pointer;">
-          <div class="avatar-edit-wrap" title="Change profile picture" style="position:relative;display:inline-flex;align-items:center;">
+        <div class="user-pill">
+          <div class="avatar-edit-wrap" onclick="openAvatarModal('primary')" title="Change profile picture" style="position:relative;cursor:pointer;display:inline-flex;align-items:center;">
             <img class="user-pill-avatar" src="${avatar}" alt="${currentUser.name}" />
             <span class="avatar-cam-overlay"><i data-lucide="camera" style="width:11px;height:11px;"></i></span>
           </div>
-          <span class="user-pill-name">${escapeHTML(currentUser.name)}</span>
+          <span class="user-pill-name" onclick="switchTab('profile')" title="View profile" style="cursor:pointer;">${escapeHTML(currentUser.name)}</span>
         </div>
         <a href="/logout" title="Log out from this device" class="btn btn-sm" style="padding: 5px 8px; color: var(--secondary); border-color: var(--border);" onclick="return confirm('Log out from this device?')">
           <i data-lucide="log-out" style="width: 13px; height: 13px;"></i>
@@ -1807,38 +1807,51 @@
       const yt = currentUser.linkedYtAccount;
 
       function accountCard(user, isLinked) {
+        const which = isLinked ? 'linked' : 'primary';
         const av = user.avatarUrl || 'https://www.gravatar.com/avatar/00000000000000000000000000000000?d=mp&f=y';
         const srcColor = isLinked ? '#ff4444' : '#1db954';
         const srcLabel = isLinked ? '🎵 YT MUSIC' : '🎧 SPOTIFY';
-        const clickAvatar = isLinked ? '' : `onclick="openAvatarModal()" style="cursor:pointer;"`;
-        const avatarHint = isLinked ? '' : `<div style="font-size:0.68rem;color:var(--secondary);font-family:var(--font-mono);text-align:center;margin-top:4px;">CLICK TO CHANGE</div>`;
-        const statusEndpoint = isLinked ? 'linked' : 'primary';
+        const statusEndpoint = which;
         const statusEmoji = user.statusEmoji || (isLinked ? '🎵' : '🎧');
         const statusMsg = user.statusMessage || '';
+        const nameVal = escapeHTML(user.name || '');
+        const nameEndpoint = isLinked ? 'linked' : 'primary';
 
         return `
           <div class="panel-card" style="position:relative;">
             <div style="display:flex;align-items:flex-start;gap:20px;flex-wrap:wrap;">
-              <!-- Avatar -->
+
+              <!-- Avatar — ONLY the image circle is clickable -->
               <div style="flex-shrink:0;text-align:center;">
-                <div class="avatar-edit-wrap" ${clickAvatar} style="width:80px;height:80px;display:inline-block;">
-                  <img src="${av}" alt="${escapeHTML(user.name)}"
+                <div class="avatar-edit-wrap"
+                  onclick="event.stopPropagation(); openAvatarModal('${which}');"
+                  style="width:80px;height:80px;display:inline-block;cursor:pointer;"
+                  title="Click to change photo">
+                  <img data-account-avatar="${which}" src="${av}" alt="${nameVal}"
                     style="width:80px;height:80px;border-radius:50%;object-fit:cover;border:2px solid var(--border);" />
-                  ${isLinked ? '' : '<span class="avatar-cam-overlay"><i data-lucide="camera" style="width:16px;height:16px;"></i></span>'}
+                  <span class="avatar-cam-overlay"><i data-lucide="camera" style="width:16px;height:16px;"></i></span>
                 </div>
-                ${avatarHint}
+                <div style="font-size:0.68rem;color:var(--secondary);font-family:var(--font-mono);text-align:center;margin-top:4px;">CLICK PHOTO</div>
               </div>
 
-              <!-- Info + Status Editor -->
+              <!-- Info + Editable Name + Status -->
               <div style="flex:1;min-width:220px;">
-                <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;flex-wrap:wrap;">
-                  <span style="font-family:var(--font-dot);font-size:1.1rem;font-weight:700;letter-spacing:.1em;">${escapeHTML(user.name)}</span>
-                  <span style="font-family:var(--font-mono);font-size:.65rem;padding:2px 8px;border:1px solid;color:${srcColor};border-color:${srcColor};">${srcLabel}</span>
-                </div>
-                <div style="font-family:var(--font-mono);font-size:.72rem;color:var(--secondary);margin-bottom:16px;">
-                  CODE: ${user.friendCode || '—'}
-                </div>
 
+                <!-- Source badge -->
+                <span style="font-family:var(--font-mono);font-size:.65rem;padding:2px 8px;border:1px solid;color:${srcColor};border-color:${srcColor};display:inline-block;margin-bottom:10px;">${srcLabel}</span>
+
+                <!-- Editable name -->
+                <div style="font-family:var(--font-mono);font-size:.72rem;color:var(--secondary);text-transform:uppercase;letter-spacing:.12em;margin-bottom:6px;">// DISPLAY NAME</div>
+                <div style="display:flex;gap:8px;margin-bottom:4px;">
+                  <input id="profileName_${nameEndpoint}" class="input-field" style="flex:1;font-weight:600;"
+                    maxlength="40" value="${nameVal}" placeholder="YOUR NAME" />
+                  <button class="btn btn-sm" onclick="saveProfileName('${nameEndpoint}')" title="Save name">
+                    <i data-lucide="check" style="width:13px;height:13px;"></i>
+                  </button>
+                </div>
+                <div style="font-family:var(--font-mono);font-size:.68rem;color:var(--secondary);margin-bottom:16px;">CODE: ${user.friendCode || '—'}</div>
+
+                <!-- Status -->
                 <div style="font-family:var(--font-mono);font-size:.72rem;color:var(--secondary);text-transform:uppercase;letter-spacing:.12em;margin-bottom:8px;">// STATUS</div>
                 <div style="display:flex;gap:8px;margin-bottom:10px;align-items:center;">
                   <input id="statusEmoji_${statusEndpoint}" class="input-field"
@@ -1893,6 +1906,30 @@
       } catch (e) { showToast('Network error.'); }
     }
 
+    async function saveProfileName(which) {
+      const input = document.getElementById(`profileName_${which}`);
+      const name = input?.value?.trim();
+      if (!name) return showToast('Name cannot be empty.');
+      const endpoint = which === 'linked' ? '/api/user/linked/name' : '/api/user/name';
+      try {
+        const res = await fetch(endpoint, {
+          method: 'PUT', credentials: 'same-origin',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name }),
+        });
+        const out = await res.json();
+        if (!res.ok) return showToast(out.error || 'Failed to save name.');
+        // Update live
+        if (which === 'primary') {
+          currentUser.name = out.name;
+          renderHeaderUser();
+        } else if (currentUser.linkedYtAccount) {
+          currentUser.linkedYtAccount.name = out.name;
+        }
+        showToast('Name updated!');
+      } catch (e) { showToast('Network error.'); }
+    }
+
     function connectFromFeedCard() {
       const input = document.getElementById('unauthNameInput');
       const name = input?.value?.trim();
@@ -1905,15 +1942,24 @@
 
     // ---- Avatar Modal ----
     let avatarPendingData = null; // { type: 'upload'|'url', data?, url? }
+    let avatarTargetAccount = 'primary'; // 'primary' or 'linked'
 
-    function openAvatarModal() {
+    function openAvatarModal(which) {
+      which = which || 'primary';
+      avatarTargetAccount = which;
       avatarPendingData = null;
       const modal = document.getElementById('avatarModal');
       const preview = document.getElementById('avatarPreviewImg');
-      // Show current avatar as preview
-      preview.src = currentUser?.avatarUrl || 'https://www.gravatar.com/avatar/00000000000000000000000000000000?d=mp&f=y';
+      const fallback = 'https://www.gravatar.com/avatar/00000000000000000000000000000000?d=mp&f=y';
+      const currentAv = which === 'linked'
+        ? (currentUser?.linkedYtAccount?.avatarUrl || fallback)
+        : (currentUser?.avatarUrl || fallback);
+      preview.src = currentAv;
       document.getElementById('avatarFileInput').value = '';
       document.getElementById('avatarUrlInput').value = '';
+      // Update modal title
+      const titleEl = document.getElementById('avatarModalTitle');
+      if (titleEl) titleEl.textContent = which === 'linked' ? '// CHANGE YT PICTURE' : '// CHANGE PROFILE PICTURE';
       switchAvatarTab('upload');
       modal.classList.add('open');
       if (window.lucide) lucide.createIcons();
@@ -1968,19 +2014,27 @@
       const btn = document.getElementById('avatarSaveBtn');
       btn.disabled = true;
       btn.textContent = '[ SAVING... ]';
+      const endpoint = avatarTargetAccount === 'linked' ? '/api/user/linked/avatar' : '/api/user/avatar';
       try {
-        const res = await fetch('/api/user/avatar', {
+        const res = await fetch(endpoint, {
           method: 'POST', credentials: 'same-origin',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(avatarPendingData),
         });
         const out = await res.json();
         if (!res.ok) { showToast(out.error || 'Failed to save.'); return; }
-        // Update avatar in header live without full reload
-        currentUser.avatarUrl = out.avatarUrl;
-        document.querySelectorAll('.user-pill-avatar').forEach(img => img.src = out.avatarUrl);
+        if (avatarTargetAccount === 'primary') {
+          currentUser.avatarUrl = out.avatarUrl;
+          document.querySelectorAll('.user-pill-avatar').forEach(img => img.src = out.avatarUrl);
+        } else if (currentUser.linkedYtAccount) {
+          currentUser.linkedYtAccount.avatarUrl = out.avatarUrl;
+        }
+        // Refresh profile tab avatars
+        document.querySelectorAll(`[data-account-avatar="${avatarTargetAccount}"]`)
+          .forEach(img => img.src = out.avatarUrl);
         showToast('Profile picture updated!');
         closeAvatarModal();
+        renderProfileTab(); // re-render to show new photo
       } catch (e) {
         showToast('Network error, try again.');
       } finally {

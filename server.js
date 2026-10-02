@@ -550,6 +550,88 @@ app.post('/api/user/avatar', async (req, res) => {
   }
 });
 
+// Helper: process avatar payload and return the new URL (or error string)
+async function processAvatarPayload(type, imgData, url, userId) {
+  if (type === 'url') {
+    if (!/^https?:\/\/.+/i.test(url || '')) return { err: 'Invalid URL — must start with http(s)://' };
+    return { avatarUrl: url.trim() };
+  } else if (type === 'upload') {
+    const match = (imgData || '').match(/^data:(image\/(jpeg|png|gif|webp));base64,(.+)$/s);
+    if (!match) return { err: 'Invalid image data.' };
+    const ext = match[2], b64 = match[3];
+    const buf = Buffer.from(b64, 'base64');
+    if (buf.length > 2_097_152) return { err: 'Image too large — max 2 MB.' };
+    const uploadDir = path.join(__dirname, 'public', 'uploads');
+    fs.mkdirSync(uploadDir, { recursive: true });
+    const filename = `avatar_${userId.replace(/[^a-z0-9]/gi, '_')}.${ext}`;
+    fs.writeFileSync(path.join(uploadDir, filename), buf);
+    return { avatarUrl: `/uploads/${filename}` };
+  }
+  return { err: 'type must be "url" or "upload"' };
+}
+
+// --- Update Avatar for the linked YT Music account ---
+app.post('/api/user/linked/avatar', async (req, res) => {
+  try {
+    const linkedYtId = req.session?.linkedYtId;
+    if (!req.session?.spotifyId) return res.status(401).json({ error: 'Not authenticated' });
+    if (!linkedYtId) return res.status(400).json({ error: 'No linked YT Music account' });
+
+    const { type, data: imgData, url } = req.body;
+    const result = await processAvatarPayload(type, imgData, url, linkedYtId);
+    if (result.err) return res.status(400).json({ error: result.err });
+
+    const dbData = await getDbData();
+    const idx = dbData.users.findIndex((u) => u.spotifyId === linkedYtId);
+    if (idx === -1) return res.status(404).json({ error: 'Linked account not found' });
+    dbData.users[idx].avatarUrl = result.avatarUrl;
+    dbData.users[idx].hasCustomAvatar = true;
+    await saveDbData(dbData);
+    res.json({ success: true, avatarUrl: result.avatarUrl });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// --- Update Display Name (primary Spotify account) ---
+app.put('/api/user/name', async (req, res) => {
+  try {
+    const user = await getAuthenticatedUser(req);
+    if (!user) return res.status(401).json({ error: 'Not authenticated' });
+    const { name } = req.body;
+    const trimmed = (name || '').trim().slice(0, 40);
+    if (!trimmed) return res.status(400).json({ error: 'Name cannot be empty' });
+    const data = await getDbData();
+    const idx = data.users.findIndex((u) => u.spotifyId === user.spotifyId);
+    if (idx === -1) return res.status(404).json({ error: 'User not found' });
+    data.users[idx].name = trimmed;
+    await saveDbData(data);
+    res.json({ success: true, name: trimmed });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// --- Update Display Name (linked YT Music account) ---
+app.put('/api/user/linked/name', async (req, res) => {
+  try {
+    const linkedYtId = req.session?.linkedYtId;
+    if (!req.session?.spotifyId) return res.status(401).json({ error: 'Not authenticated' });
+    if (!linkedYtId) return res.status(400).json({ error: 'No linked YT Music account' });
+    const { name } = req.body;
+    const trimmed = (name || '').trim().slice(0, 40);
+    if (!trimmed) return res.status(400).json({ error: 'Name cannot be empty' });
+    const data = await getDbData();
+    const idx = data.users.findIndex((u) => u.spotifyId === linkedYtId);
+    if (idx === -1) return res.status(404).json({ error: 'Linked account not found' });
+    data.users[idx].name = trimmed;
+    await saveDbData(data);
+    res.json({ success: true, name: trimmed });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // --- Selective Friend Feed Endpoint ---
 app.get('/api/feed', async (req, res) => {
   try {
