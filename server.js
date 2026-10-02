@@ -417,7 +417,15 @@ app.get('/api/me', async (req, res) => {
     let linkedYtAccount = null;
     if (linkedYtId) {
       const ytUser = data.users.find((u) => u.spotifyId === linkedYtId);
-      if (ytUser) linkedYtAccount = { spotifyId: ytUser.spotifyId, name: ytUser.name, source: 'ytmusic' };
+      if (ytUser) linkedYtAccount = {
+        spotifyId: ytUser.spotifyId,
+        name: ytUser.name,
+        source: 'ytmusic',
+        avatarUrl: ytUser.avatarUrl || '',
+        friendCode: ytUser.friendCode || '',
+        statusEmoji: ytUser.statusEmoji || '🎵',
+        statusMessage: ytUser.statusMessage || '',
+      };
     }
 
     res.json({
@@ -465,6 +473,34 @@ app.put('/api/user/status', async (req, res) => {
       return res.json({ success: true, user: safeUser });
     }
     res.status(404).json({ error: 'User not found' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Update Status for the linked YT Music account independently
+app.put('/api/user/linked/status', async (req, res) => {
+  try {
+    const linkedYtId = req.session?.linkedYtId;
+    if (!req.session?.spotifyId) return res.status(401).json({ error: 'Not authenticated' });
+    if (!linkedYtId) return res.status(400).json({ error: 'No linked YT Music account' });
+
+    const { statusMessage, statusEmoji } = req.body;
+    const data = await getDbData();
+    const idx = data.users.findIndex((u) => u.spotifyId === linkedYtId);
+    if (idx === -1) return res.status(404).json({ error: 'Linked account not found' });
+
+    data.users[idx].statusMessage = (statusMessage || '').trim().slice(0, 100);
+    data.users[idx].statusEmoji = (statusEmoji || '🎵').trim().slice(0, 10);
+    await saveDbData(data);
+
+    io.emit('user_status_changed', {
+      spotifyId: linkedYtId,
+      statusMessage: data.users[idx].statusMessage,
+      statusEmoji: data.users[idx].statusEmoji,
+    });
+
+    res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

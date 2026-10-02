@@ -1210,6 +1210,10 @@
           <span>[ CIRCLE ]</span>
           <span id="requestsBadge" class="tab-badge" style="display: none;">0</span>
         </button>
+        <button class="nav-tab" id="profileNavTab" onclick="switchTab('profile')" style="display:none;">
+          <i data-lucide="user-circle" style="width: 15px; height: 15px;"></i>
+          <span>[ PROFILE ]</span>
+        </button>
       </nav>
 
       <div style="display: flex; align-items: center; gap: 10px;">
@@ -1346,6 +1350,11 @@
           </div>
         </div>
       </div>
+    </section>
+
+    <!-- TAB 4: Profile -->
+    <section id="tab-profile" class="tab-content">
+      <div id="profileTabContent" style="max-width: 800px; margin: 0 auto; display: flex; flex-direction: column; gap: 24px; padding-top: 8px;"></div>
     </section>
   </div>
 
@@ -1574,8 +1583,10 @@
       const target = document.getElementById(`tab-${tabId}`);
       if (target) target.classList.add('active');
 
+      // Activate the matching nav button
+      const tabOrder = ['feed', 'lounge', 'friends', 'profile'];
       const tabs = Array.from(document.querySelectorAll('.nav-tab'));
-      const activeIdx = ['feed', 'lounge', 'friends'].indexOf(tabId);
+      const activeIdx = tabOrder.indexOf(tabId);
       if (tabs[activeIdx]) tabs[activeIdx].classList.add('active');
 
       if (tabId === 'lounge') {
@@ -1585,6 +1596,8 @@
         loadChatMessages();
       } else if (tabId === 'friends') {
         loadUserProfile();
+      } else if (tabId === 'profile') {
+        renderProfileTab();
       }
 
       if (window.lucide) lucide.createIcons();
@@ -1615,6 +1628,10 @@
       const avatar = currentUser.avatarUrl || 'https://www.gravatar.com/avatar/00000000000000000000000000000000?d=mp&f=y';
       const statusText = currentUser.statusMessage ? `${currentUser.statusEmoji || '🎧'} ${currentUser.statusMessage}` : '[ SET STATUS ]';
 
+      // Show profile tab in nav and make name clickable
+      const profileNavTab = document.getElementById('profileNavTab');
+      if (profileNavTab) profileNavTab.style.display = '';
+
       section.innerHTML = `
         <div class="friend-code-badge" onclick="copyMyFriendCode()" title="Click to copy Friend Code">
           <i data-lucide="tag" style="width: 12px; height: 12px;"></i>
@@ -1627,8 +1644,8 @@
           <i data-lucide="smartphone" style="width: 13px; height: 13px;"></i>
           <span style="display: none; font-size: 0.7rem;" class="device-btn-label">[ SIGN IN ON DEVICE ]</span>
         </button>
-        <div class="user-pill">
-          <div class="avatar-edit-wrap" onclick="openAvatarModal()" title="Change profile picture" style="position:relative;cursor:pointer;display:inline-flex;align-items:center;">
+        <div class="user-pill" onclick="switchTab('profile')" title="View Profile" style="cursor:pointer;">
+          <div class="avatar-edit-wrap" title="Change profile picture" style="position:relative;display:inline-flex;align-items:center;">
             <img class="user-pill-avatar" src="${avatar}" alt="${currentUser.name}" />
             <span class="avatar-cam-overlay"><i data-lucide="camera" style="width:11px;height:11px;"></i></span>
           </div>
@@ -1774,6 +1791,101 @@
         `;
       }
       if (window.lucide) lucide.createIcons();
+    }
+
+    // ---- Profile Tab ----
+    function renderProfileTab() {
+      if (!currentUser) return;
+      const container = document.getElementById('profileTabContent');
+      if (!container) return;
+
+      const yt = currentUser.linkedYtAccount;
+
+      function accountCard(user, isLinked) {
+        const av = user.avatarUrl || 'https://www.gravatar.com/avatar/00000000000000000000000000000000?d=mp&f=y';
+        const srcColor = isLinked ? '#ff4444' : '#1db954';
+        const srcLabel = isLinked ? '🎵 YT MUSIC' : '🎧 SPOTIFY';
+        const clickAvatar = isLinked ? '' : `onclick="openAvatarModal()" style="cursor:pointer;"`;
+        const avatarHint = isLinked ? '' : `<div style="font-size:0.68rem;color:var(--secondary);font-family:var(--font-mono);text-align:center;margin-top:4px;">CLICK TO CHANGE</div>`;
+        const statusEndpoint = isLinked ? 'linked' : 'primary';
+        const statusEmoji = user.statusEmoji || (isLinked ? '🎵' : '🎧');
+        const statusMsg = user.statusMessage || '';
+
+        return `
+          <div class="panel-card" style="position:relative;">
+            <div style="display:flex;align-items:flex-start;gap:20px;flex-wrap:wrap;">
+              <!-- Avatar -->
+              <div style="flex-shrink:0;text-align:center;">
+                <div class="avatar-edit-wrap" ${clickAvatar} style="width:80px;height:80px;display:inline-block;">
+                  <img src="${av}" alt="${escapeHTML(user.name)}"
+                    style="width:80px;height:80px;border-radius:50%;object-fit:cover;border:2px solid var(--border);" />
+                  ${isLinked ? '' : '<span class="avatar-cam-overlay"><i data-lucide="camera" style="width:16px;height:16px;"></i></span>'}
+                </div>
+                ${avatarHint}
+              </div>
+
+              <!-- Info + Status Editor -->
+              <div style="flex:1;min-width:220px;">
+                <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;flex-wrap:wrap;">
+                  <span style="font-family:var(--font-dot);font-size:1.1rem;font-weight:700;letter-spacing:.1em;">${escapeHTML(user.name)}</span>
+                  <span style="font-family:var(--font-mono);font-size:.65rem;padding:2px 8px;border:1px solid;color:${srcColor};border-color:${srcColor};">${srcLabel}</span>
+                </div>
+                <div style="font-family:var(--font-mono);font-size:.72rem;color:var(--secondary);margin-bottom:16px;">
+                  CODE: ${user.friendCode || '—'}
+                </div>
+
+                <div style="font-family:var(--font-mono);font-size:.72rem;color:var(--secondary);text-transform:uppercase;letter-spacing:.12em;margin-bottom:8px;">// STATUS</div>
+                <div style="display:flex;gap:8px;margin-bottom:10px;align-items:center;">
+                  <input id="statusEmoji_${statusEndpoint}" class="input-field"
+                    style="width:56px;text-align:center;font-size:1.1rem;" maxlength="2"
+                    value="${escapeHTML(statusEmoji)}" placeholder="🎧" />
+                  <input id="statusMsg_${statusEndpoint}" class="input-field" style="flex:1;"
+                    maxlength="100" value="${escapeHTML(statusMsg)}"
+                    placeholder="CURRENT MOOD / VIBE..." />
+                </div>
+                <button class="btn btn-sm" style="width:100%;" onclick="saveProfileStatus('${statusEndpoint}')">
+                  <i data-lucide="save" style="width:12px;height:12px;"></i>
+                  [ SAVE STATUS ]
+                </button>
+              </div>
+            </div>
+          </div>`;
+      }
+
+      let html = `
+        <div style="font-family:var(--font-dot);font-size:.75rem;letter-spacing:.2em;text-transform:uppercase;color:var(--secondary);padding-bottom:10px;border-bottom:1px solid var(--border);margin-bottom:4px;">// YOUR ACCOUNTS</div>
+        ${accountCard(currentUser, false)}
+        ${yt ? accountCard(yt, true) : `
+        <div class="panel-card" style="text-align:center;opacity:.6;">
+          <i data-lucide="music-2" style="width:24px;height:24px;margin-bottom:10px;color:var(--secondary);"></i>
+          <p style="font-family:var(--font-mono);font-size:.8rem;color:var(--secondary);">No YT Music account linked.<br/>Go to <b>[ CIRCLE ]</b> to link one.</p>
+        </div>`}
+      `;
+
+      container.innerHTML = html;
+      if (window.lucide) lucide.createIcons();
+    }
+
+    async function saveProfileStatus(which) {
+      const emoji = document.getElementById(`statusEmoji_${which}`)?.value?.trim() || '🎧';
+      const msg = document.getElementById(`statusMsg_${which}`)?.value?.trim() || '';
+      const endpoint = which === 'linked' ? '/api/user/linked/status' : '/api/user/status';
+      try {
+        const res = await fetch(endpoint, {
+          method: 'PUT', credentials: 'same-origin',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ statusEmoji: emoji, statusMessage: msg }),
+        });
+        const out = await res.json();
+        if (!res.ok) return showToast(out.error || 'Failed to save status.');
+        // Reflect in currentUser so header is also up to date
+        if (which === 'primary') {
+          currentUser.statusEmoji = emoji;
+          currentUser.statusMessage = msg;
+          renderHeaderUser();
+        }
+        showToast('Status saved!');
+      } catch (e) { showToast('Network error.'); }
     }
 
     function connectFromFeedCard() {
