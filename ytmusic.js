@@ -70,11 +70,14 @@ function record(userId, item) {
   const prev = cache.get(userId);
   const it = clean(item);
   let firstSeenAt = prev?.firstSeenAt ?? null;
+
   const isNewTrack = prev?.item && it && prev.item.videoId !== it.videoId;
-  const isJustNow = it && (it.played === 'Just now' || (it.played || '').includes('second') || (it.played || '').includes('minute'));
-  if (isNewTrack || !firstSeenAt || (isJustNow && (!prev?.firstSeenAt || (prev.item && prev.item.played !== it.played)))) {
+  const isPlayedJustNow = it && (it.played === 'Just now' || (it.played || '').includes('second') || (it.played || '').includes('1 minute'));
+
+  if (isNewTrack || (isPlayedJustNow && (!prev?.firstSeenAt || (prev.item && prev.item.played !== it.played)))) {
     firstSeenAt = Date.now();
   }
+
   cache.set(userId, { item: it, firstSeenAt, authFails: 0, netFails: 0, status: 'ok', polling: false });
 }
 
@@ -106,11 +109,10 @@ function getCard(user) {
     spotifyUrl: `https://music.youtube.com/watch?v=${it.videoId}`, durationMs,
   };
 
-  const elapsed = c.firstSeenAt ? Date.now() - c.firstSeenAt : 0;
-  const isRecent = it.played === 'Just now' || (it.played || '').includes('second') || (it.played || '').includes('minute');
-  const isWithinDuration = elapsed < durationMs + 30_000;
+  const isPlayedJustNow = it.played === 'Just now' || (it.played || '').includes('second') || (it.played || '').includes('1 minute');
 
-  if (isRecent || isWithinDuration) {
+  if (c.firstSeenAt && (isPlayedJustNow || Date.now() - c.firstSeenAt < durationMs + 30_000)) {
+    const elapsed = Date.now() - c.firstSeenAt;
     const progressMs = Math.min(Math.max(0, elapsed), durationMs);
     return { ...card, playing: true, progressMs, timestamp: Date.now() };
   }
