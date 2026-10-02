@@ -2182,6 +2182,7 @@
                   </div>
                 </div>
 
+                ${friend.source !== 'ytmusic' ? `
                 <div class="progress-section">
                   <div class="progress-bar-bg">
                     <div id="progress-bar-${friend.spotifyId}" class="progress-bar-fill" style="width: ${progressPercent}%;"></div>
@@ -2191,6 +2192,7 @@
                     <span>${msToClock(friend.durationMs)}</span>
                   </div>
                 </div>
+                ` : ''}
 
                 <div class="card-actions-toolbar">
                   ${!isMe && friend.source !== 'ytmusic' ? `
