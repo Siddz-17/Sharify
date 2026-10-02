@@ -7,7 +7,7 @@ const { spawn } = require('child_process');
 const PY = process.env.PYTHON_BIN || (process.platform === 'win32' ? 'py' : 'python3');
 const SCRIPT = path.join(__dirname, 'ytm', 'history.py');
 const POLL_MS = 5_000;       // server-side poll cadence
-const PY_TIMEOUT = 8_000;   // kill Python if no response in 8s (well under poll interval)
+const PY_TIMEOUT = 25_000;  // 25s limit gives Python requests ample time to connect
 const MAX_AUTH_FAILS = 20;  // consecutive *genuine auth* failures before marking expired
                              // ~100s of real 401/403s — network blips never count
 
@@ -34,7 +34,7 @@ function runPy(payload) {
     const p = spawn(PY, [SCRIPT], { stdio: ['pipe', 'pipe', 'pipe'] });
     let out = '';
     let errOut = '';
-    const timer = setTimeout(() => { p.kill(); resolve({ ok: false, error: 'YT Music helper timed out (8s limit)' }); }, PY_TIMEOUT);
+    const timer = setTimeout(() => { p.kill(); resolve({ ok: false, error: 'YT Music helper timed out (25s limit)' }); }, PY_TIMEOUT);
     p.stdout.on('data', (d) => (out += d));
     p.stderr.on('data', (d) => (errOut += d));
     p.on('error', (e) => { clearTimeout(timer); resolve({ ok: false, error: `Python spawn error (${PY}): ${e.message}` }); });
