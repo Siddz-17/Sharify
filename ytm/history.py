@@ -18,6 +18,19 @@ def main():
     try:
         req = json.load(sys.stdin)
         raw = req.get("raw")
+        if raw:
+            import re
+            # If cookie contains SAPISID but missing __Secure-3PAPISID, inject it automatically
+            if "SAPISID=" in raw and "__Secure-3PAPISID=" not in raw:
+                m = re.search(r'SAPISID=([^;\r\n]+)', raw)
+                if m:
+                    sapisid_val = m.group(1).strip()
+                    # Find cookie header or append
+                    if "cookie:" in raw.lower():
+                        raw = re.sub(r'(cookie:\s*)', r'\1__Secure-3PAPISID=' + sapisid_val + '; ', raw, flags=re.IGNORECASE)
+                    else:
+                        raw += f"\ncookie: __Secure-3PAPISID={sapisid_val}"
+
         auth = setup(filepath=None, headers_raw=raw) if raw else req["auth"]
         hist = YTMusic(auth).get_history()
         item = None
@@ -40,6 +53,9 @@ def main():
 
     except Exception as e:
         msg = str(e)
+        if "__Secure-3PAPISID" in msg:
+            msg = "Missing YouTube Music login cookie (__Secure-3PAPISID). Open music.youtube.com while logged in, press F12 (DevTools) -> Network tab -> click any request (e.g. 'browse') -> copy ALL Request Headers."
+
         # Try to get HTTP status code if available
         status = None
         try:
@@ -59,7 +75,7 @@ def main():
         # Decide if it looks like an auth / credential problem
         auth_keywords = ("401", "403", "unauthorized", "forbidden",
                          "invalid cookie", "invalid header", "login", "sign in",
-                         "credentials", "authentication")
+                         "credentials", "authentication", "__secure-3papisid")
         is_auth = (
             status in (401, 403)
             or any(kw in msg.lower() for kw in auth_keywords)
@@ -67,7 +83,7 @@ def main():
         print(json.dumps({
             "ok": False,
             "authError": is_auth,
-            "error": type(e).__name__ + ": " + msg[:150],
+            "error": msg[:200],
         }))
 
 main()
