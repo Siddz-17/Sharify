@@ -356,6 +356,12 @@ app.get('/callback', async (req, res) => {
   }
 });
 
+// --- Logout ---
+app.get('/logout', (req, res) => {
+  req.session = null; // cookie-session: setting to null clears the cookie
+  res.redirect('/');
+});
+
 // Helper to get active user from session or header
 async function getAuthenticatedUser(req) {
   const data = await getDbData();

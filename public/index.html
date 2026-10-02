@@ -1549,6 +1549,9 @@
           <img class="user-pill-avatar" src="${avatar}" alt="${currentUser.name}" />
           <span class="user-pill-name">${escapeHTML(currentUser.name)}</span>
         </div>
+        <a href="/logout" title="Log out from this device" class="btn btn-sm" style="padding: 5px 8px; color: var(--secondary); border-color: var(--border);" onclick="return confirm('Log out from this device?')">
+          <i data-lucide="log-out" style="width: 13px; height: 13px;"></i>
+        </a>
       `;
 
       const codeDisplay = document.getElementById('myFriendCodeDisplay');
