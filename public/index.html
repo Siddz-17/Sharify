@@ -1352,6 +1352,44 @@
     </div>
   </div>
 
+  <!-- Modal: Sign in on Another Device -->
+  <div id="deviceSigninModal" class="modal-backdrop" onclick="if(event.target === this) closeDeviceSigninModal()">
+    <div class="modal-content" style="max-width: 360px;">
+      <button class="modal-close" onclick="closeDeviceSigninModal()"><i data-lucide="x" style="width: 14px; height: 14px;"></i></button>
+      <div class="panel-title-lg" style="margin-bottom: 6px;">
+        <i data-lucide="smartphone"></i>
+        <span>// SIGN IN ON ANOTHER DEVICE</span>
+      </div>
+      <p style="color: var(--secondary); font-size: 0.8rem; margin-bottom: 18px; font-family: var(--font-inter); line-height: 1.55;">Scan the QR code or open the link on your phone. The code is single-use and expires in 10 minutes.</p>
+
+      <!-- QR Code -->
+      <div id="deviceQrContainer" style="display: flex; justify-content: center; background: #fff; padding: 14px; border: 1px solid var(--border); max-width: 200px; margin: 0 auto 16px; position: relative; min-height: 200px; align-items: center;">
+        <span style="color:#555; font-size:0.75rem;">GENERATING...</span>
+      </div>
+
+      <!-- Countdown ring + label -->
+      <div style="display: flex; align-items: center; justify-content: center; gap: 10px; margin-bottom: 14px;">
+        <svg viewBox="0 0 36 36" style="width: 38px; height: 38px; transform: rotate(-90deg);">
+          <circle cx="18" cy="18" r="15.9" fill="none" stroke="var(--border)" stroke-width="2.5"/>
+          <circle id="deviceCountdownRing" cx="18" cy="18" r="15.9" fill="none" stroke="var(--foreground)" stroke-width="2.5"
+            stroke-dasharray="100 100" stroke-dashoffset="0" style="transition: stroke-dashoffset 1s linear;"/>
+        </svg>
+        <span id="deviceCountdownLabel" style="font-family: var(--font-mono); font-size: 0.85rem; letter-spacing: 0.1em;">10:00</span>
+        <button class="btn btn-sm" onclick="refreshDeviceToken()" title="Generate new code">
+          <i data-lucide="refresh-cw" style="width: 13px; height: 13px;"></i>
+        </button>
+      </div>
+
+      <!-- Link field + copy -->
+      <div style="display: flex; gap: 8px;">
+        <input id="deviceSigninLink" class="input-field" readonly style="font-size: 0.7rem; font-family: var(--font-mono);" />
+        <button class="btn btn-sm" onclick="copyDeviceLink()" title="Copy link">
+          <i data-lucide="copy" style="width: 14px; height: 14px;"></i>
+        </button>
+      </div>
+    </div>
+  </div>
+
   <div id="toast" class="toast">
     <i data-lucide="check" style="width: 14px; height: 14px;"></i>
     <span id="toast-message">SUCCESS</span>
@@ -1502,6 +1540,10 @@
         </div>
         <button class="status-badge-btn" onclick="openStatusModal()">
           <span>${escapeHTML(statusText)}</span>
+        </button>
+        <button class="btn btn-sm" onclick="openDeviceSigninModal()" title="Sign in on another device" style="gap: 5px;">
+          <i data-lucide="smartphone" style="width: 13px; height: 13px;"></i>
+          <span style="display: none; font-size: 0.7rem;" class="device-btn-label">[ SIGN IN ON DEVICE ]</span>
         </button>
         <div class="user-pill">
           <img class="user-pill-avatar" src="${avatar}" alt="${currentUser.name}" />
@@ -2357,6 +2399,90 @@
       const modal = document.getElementById('inviteModal');
       modal.classList.remove('show');
       setTimeout(() => modal.style.display = 'none', 300);
+    }
+
+    // --- Device Sign-in Modal ---
+    let _deviceCountdownInterval = null;
+    let _deviceExpiresAt = 0;
+
+    async function openDeviceSigninModal() {
+      const modal = document.getElementById('deviceSigninModal');
+      modal.style.display = 'flex';
+      setTimeout(() => modal.classList.add('show'), 10);
+      if (window.lucide) lucide.createIcons();
+      await refreshDeviceToken();
+    }
+
+    function closeDeviceSigninModal() {
+      const modal = document.getElementById('deviceSigninModal');
+      modal.classList.remove('show');
+      setTimeout(() => modal.style.display = 'none', 300);
+      clearInterval(_deviceCountdownInterval);
+      _deviceCountdownInterval = null;
+    }
+
+    async function refreshDeviceToken() {
+      // Clear previous countdown
+      clearInterval(_deviceCountdownInterval);
+
+      const qrContainer = document.getElementById('deviceQrContainer');
+      qrContainer.innerHTML = '<span style="color:#555; font-size:0.75rem;">GENERATING...</span>';
+      document.getElementById('deviceSigninLink').value = '';
+      document.getElementById('deviceCountdownLabel').textContent = '10:00';
+
+      try {
+        const res = await fetch('/api/auth/device-token', { method: 'POST', credentials: 'same-origin' });
+        if (!res.ok) { showToast('Could not generate sign-in link. Are you logged in?'); return; }
+        const { link, expiresAt } = await res.json();
+        _deviceExpiresAt = expiresAt;
+
+        document.getElementById('deviceSigninLink').value = link;
+
+        // Draw QR
+        qrContainer.innerHTML = '';
+        if (window.QRCode) {
+          new QRCode(qrContainer, {
+            text: link,
+            width: 170,
+            height: 170,
+            colorDark: '#000000',
+            colorLight: '#ffffff',
+            correctLevel: QRCode.CorrectLevel.M,
+          });
+        }
+
+        // Start countdown
+        const ring = document.getElementById('deviceCountdownRing');
+        const label = document.getElementById('deviceCountdownLabel');
+        const totalMs = expiresAt - Date.now();
+        const circumference = 100; // stroke-dasharray value
+
+        _deviceCountdownInterval = setInterval(() => {
+          const remaining = Math.max(0, _deviceExpiresAt - Date.now());
+          const mins = Math.floor(remaining / 60000);
+          const secs = Math.floor((remaining % 60000) / 1000);
+          label.textContent = `${mins}:${String(secs).padStart(2, '0')}`;
+
+          const pct = remaining / totalMs;
+          ring.setAttribute('stroke-dashoffset', String((1 - pct) * circumference));
+
+          if (remaining <= 0) {
+            clearInterval(_deviceCountdownInterval);
+            label.textContent = 'EXPIRED';
+            qrContainer.innerHTML = '<span style="color:#888;font-size:0.8rem;font-family:monospace;">CODE EXPIRED<br/>Press ↻ for new</span>';
+            qrContainer.style.display = 'flex';
+            qrContainer.style.alignItems = 'center';
+            qrContainer.style.justifyContent = 'center';
+          }
+        }, 1000);
+
+      } catch (e) { showToast('Network error generating sign-in link.'); }
+    }
+
+    function copyDeviceLink() {
+      const link = document.getElementById('deviceSigninLink').value;
+      if (!link) return;
+      copyToClipboard(link, 'Sign-in link copied!');
     }
     function copyInviteModalLink() {
       const link = document.getElementById('inviteModalLink').value;

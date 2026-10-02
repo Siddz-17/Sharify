@@ -560,6 +560,63 @@ app.get('/api/feed', async (req, res) => {
 });
 
 
+// --- Device Sign-in Token Store (in-memory, single-use, 10-min TTL) ---
+const deviceTokens = new Map(); // token -> { spotifyId, expiresAt }
+
+// Issue a one-time device sign-in token for the currently logged-in session
+app.post('/api/auth/device-token', async (req, res) => {
+  try {
+    const user = await getAuthenticatedUser(req);
+    if (!user) return res.status(401).json({ error: 'Not authenticated' });
+
+    // Clean up expired tokens
+    const now = Date.now();
+    for (const [tok, val] of deviceTokens) {
+      if (val.expiresAt < now) deviceTokens.delete(tok);
+    }
+
+    const token = crypto.randomBytes(24).toString('hex');
+    const expiresAt = now + 10 * 60 * 1000; // 10 minutes
+    deviceTokens.set(token, { spotifyId: user.spotifyId, expiresAt });
+
+    const link = `${req.protocol}://${req.get('host')}/auth/device?token=${token}`;
+    res.json({ token, link, expiresAt });
+  } catch (err) {
+    console.error('Device token error:', err.message);
+    res.status(500).json({ error: 'Failed to generate device token' });
+  }
+});
+
+// Redeem a device sign-in token — called by the phone/new browser
+app.get('/auth/device', async (req, res) => {
+  try {
+    const { token } = req.query;
+    if (!token) return res.status(400).send('Missing token.');
+
+    const record = deviceTokens.get(token);
+    if (!record) return res.status(410).send('This sign-in link has already been used or has expired. Ask for a new one from the logged-in device.');
+    if (record.expiresAt < Date.now()) {
+      deviceTokens.delete(token);
+      return res.status(410).send('This sign-in link has expired (10-minute limit). Ask for a new one from the logged-in device.');
+    }
+
+    // Consume the token (single-use)
+    deviceTokens.delete(token);
+
+    const data = await getDbData();
+    const user = data.users.find((u) => u.spotifyId === record.spotifyId);
+    if (!user) return res.status(404).send('Account not found. The original session may have been deleted.');
+
+    req.session.spotifyId = user.spotifyId;
+    req.session.displayName = user.name;
+
+    res.redirect(`/?connected=${encodeURIComponent(user.name)}&userId=${encodeURIComponent(user.spotifyId)}`);
+  } catch (err) {
+    console.error('Device auth error:', err.message);
+    res.status(500).send('Something went wrong. Please try again.');
+  }
+});
+
 // --- YouTube Music: connect / reconnect / disconnect ---
 const ytAttempts = new Map();
 function ytRateLimited(ip) {
@@ -584,26 +641,54 @@ app.post('/api/ytmusic/connect', async (req, res) => {
 
     const data = await getDbData();
     const sessionId = req.session?.spotifyId;
+
+    // Priority 1: Existing YT Music user from session (reconnect credentials)
     let idx = data.users.findIndex((u) => u.spotifyId === sessionId && u.source === 'ytmusic');
 
+    // Priority 2: Existing Spotify user already in session — promote to include YT (shouldn't normally happen, but guard)
+    if (idx === -1 && sessionId) {
+      const existingSessionUser = data.users.findIndex((u) => u.spotifyId === sessionId);
+      if (existingSessionUser > -1) {
+        // They're already logged in as a different account; just update credentials if ytmusic source
+        if (data.users[existingSessionUser].source === 'ytmusic') {
+          idx = existingSessionUser;
+          data.users[idx].ytAuthEnc = result.authEnc;
+        }
+      }
+    }
+
     if (idx > -1) {
-      data.users[idx].ytAuthEnc = result.authEnc; // reconnect
+      // Reconnect: update credentials only
+      data.users[idx].ytAuthEnc = result.authEnc;
     } else {
+      // New YT Music user — name is required
       if (!name) return res.status(400).json({ error: 'Please enter your name.' });
-      const id = 'yt_' + crypto.randomBytes(8).toString('hex');
-      data.users.push({
-        spotifyId: id, name, spotifyProfileName: name, avatarUrl: '',
-        friendCode: generateFriendCode(name), friends: [], friendRequestsReceived: [], friendRequestsSent: [],
-        statusMessage: 'Just joined Sharify! 🎧', statusEmoji: '✨',
-        source: 'ytmusic', ytAuthEnc: result.authEnc, topArtists: [], topGenres: [],
-        createdAt: new Date().toISOString(),
-      });
-      idx = data.users.length - 1;
-      if (ref) {
-        const referrer = data.users.find((u) => u.friendCode.toLowerCase() === ref.toLowerCase() || u.spotifyId === ref);
-        if (referrer) {
-          if (!referrer.friends.includes(id)) referrer.friends.push(id);
-          data.users[idx].friends.push(referrer.spotifyId);
+
+      // Duplicate-login guard: check if a YT Music user with the same display name already exists
+      // (covers the case where someone submits twice or reconnects from a fresh browser)
+      const dupIdx = data.users.findIndex(
+        (u) => u.source === 'ytmusic' && u.name.toLowerCase() === name.toLowerCase()
+      );
+      if (dupIdx > -1) {
+        // Restore session to the existing account and refresh credentials
+        data.users[dupIdx].ytAuthEnc = result.authEnc;
+        idx = dupIdx;
+      } else {
+        const id = 'yt_' + crypto.randomBytes(8).toString('hex');
+        data.users.push({
+          spotifyId: id, name, spotifyProfileName: name, avatarUrl: '',
+          friendCode: generateFriendCode(name), friends: [], friendRequestsReceived: [], friendRequestsSent: [],
+          statusMessage: 'Just joined Sharify! 🎧', statusEmoji: '✨',
+          source: 'ytmusic', ytAuthEnc: result.authEnc, topArtists: [], topGenres: [],
+          createdAt: new Date().toISOString(),
+        });
+        idx = data.users.length - 1;
+        if (ref) {
+          const referrer = data.users.find((u) => u.friendCode.toLowerCase() === ref.toLowerCase() || u.spotifyId === ref);
+          if (referrer) {
+            if (!referrer.friends.includes(data.users[idx].spotifyId)) referrer.friends.push(data.users[idx].spotifyId);
+            data.users[idx].friends.push(referrer.spotifyId);
+          }
         }
       }
     }
