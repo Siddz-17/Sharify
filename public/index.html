@@ -1153,6 +1153,33 @@
         display: flex !important;
       }
     }
+
+    /* Avatar edit overlay */
+    .avatar-edit-wrap { border-radius: 50%; overflow: hidden; }
+    .avatar-cam-overlay {
+      position: absolute; inset: 0; border-radius: 50%;
+      background: rgba(0,0,0,0.55); display: flex; align-items: center;
+      justify-content: center; opacity: 0; transition: opacity 0.15s ease;
+      pointer-events: none;
+    }
+    .avatar-edit-wrap:hover .avatar-cam-overlay { opacity: 1; }
+
+    /* Avatar modal drop zone */
+    .avatar-drop-zone {
+      border: 2px dashed var(--border); padding: 28px 16px; text-align: center;
+      cursor: pointer; transition: border-color 0.2s, background 0.2s;
+      position: relative;
+    }
+    .avatar-drop-zone:hover, .avatar-drop-zone.drag-over {
+      border-color: var(--foreground); background: rgba(255,255,255,0.04);
+    }
+    .avatar-drop-zone input[type="file"] {
+      position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%;
+    }
+    #avatarPreviewImg {
+      width: 80px; height: 80px; border-radius: 50%; object-fit: cover;
+      border: 2px solid var(--border); display: block; margin: 0 auto 12px;
+    }
   </style>
 </head>
 <body class="bg-dot-matrix">
@@ -1342,6 +1369,51 @@
           <i data-lucide="copy" style="width: 14px; height: 14px;"></i>
         </button>
       </div>
+    </div>
+  </div>
+
+  <!-- Modal: Edit Avatar / Profile Picture -->
+  <div id="avatarModal" class="modal-backdrop" onclick="if(event.target === this) closeAvatarModal()">
+    <div class="modal-content">
+      <button class="modal-close" onclick="closeAvatarModal()"><i data-lucide="x" style="width: 14px; height: 14px;"></i></button>
+      <div class="panel-title-lg" style="margin-bottom: 6px;">
+        <i data-lucide="camera"></i>
+        <span>// CHANGE PROFILE PICTURE</span>
+      </div>
+      <p style="color: var(--secondary); font-size: 0.78rem; margin-bottom: 18px; font-family: var(--font-mono);">Upload an image or paste a direct URL. Max 2 MB for uploads.</p>
+
+      <!-- Preview -->
+      <img id="avatarPreviewImg" src="" alt="Preview" />
+
+      <!-- Tabs -->
+      <div style="display: flex; gap: 0; margin-bottom: 14px; border: 1px solid var(--border);">
+        <button id="avatarTabUpload" class="btn" onclick="switchAvatarTab('upload')" style="flex:1; border:none; border-right: 1px solid var(--border);">
+          <i data-lucide="upload" style="width:13px;height:13px;"></i> UPLOAD
+        </button>
+        <button id="avatarTabUrl" class="btn btn-secondary" onclick="switchAvatarTab('url')" style="flex:1; border:none;">
+          <i data-lucide="link" style="width:13px;height:13px;"></i> URL
+        </button>
+      </div>
+
+      <!-- Upload panel -->
+      <div id="avatarUploadPanel">
+        <div class="avatar-drop-zone" id="avatarDropZone">
+          <input type="file" id="avatarFileInput" accept="image/jpeg,image/png,image/gif,image/webp" onchange="onAvatarFileSelected(this)" />
+          <i data-lucide="image-plus" style="width:28px;height:28px;color:var(--secondary);margin-bottom:8px;"></i>
+          <p style="font-family:var(--font-mono);font-size:0.75rem;color:var(--secondary);">DRAG & DROP OR CLICK TO CHOOSE<br/>JPEG · PNG · GIF · WEBP · MAX 2MB</p>
+        </div>
+      </div>
+
+      <!-- URL panel -->
+      <div id="avatarUrlPanel" style="display:none;">
+        <input id="avatarUrlInput" class="input-field" placeholder="https://..." style="margin-bottom:8px;" oninput="previewAvatarUrl()" />
+        <p style="font-size:0.72rem;color:var(--secondary);font-family:var(--font-mono);">Must be a direct image link (ends in .jpg, .png etc.)</p>
+      </div>
+
+      <button class="btn" id="avatarSaveBtn" style="width:100%;margin-top:14px;" onclick="saveAvatar()">
+        <i data-lucide="save" style="width:14px;height:14px;"></i>
+        [ SAVE PICTURE ]
+      </button>
     </div>
   </div>
 
@@ -1556,7 +1628,10 @@
           <span style="display: none; font-size: 0.7rem;" class="device-btn-label">[ SIGN IN ON DEVICE ]</span>
         </button>
         <div class="user-pill">
-          <img class="user-pill-avatar" src="${avatar}" alt="${currentUser.name}" />
+          <div class="avatar-edit-wrap" onclick="openAvatarModal()" title="Change profile picture" style="position:relative;cursor:pointer;display:inline-flex;align-items:center;">
+            <img class="user-pill-avatar" src="${avatar}" alt="${currentUser.name}" />
+            <span class="avatar-cam-overlay"><i data-lucide="camera" style="width:11px;height:11px;"></i></span>
+          </div>
           <span class="user-pill-name">${escapeHTML(currentUser.name)}</span>
         </div>
         <a href="/logout" title="Log out from this device" class="btn btn-sm" style="padding: 5px 8px; color: var(--secondary); border-color: var(--border);" onclick="return confirm('Log out from this device?')">
@@ -1710,6 +1785,108 @@
       }
       window.location.href = `/login?name=${encodeURIComponent(name)}`;
     }
+
+    // ---- Avatar Modal ----
+    let avatarPendingData = null; // { type: 'upload'|'url', data?, url? }
+
+    function openAvatarModal() {
+      avatarPendingData = null;
+      const modal = document.getElementById('avatarModal');
+      const preview = document.getElementById('avatarPreviewImg');
+      // Show current avatar as preview
+      preview.src = currentUser?.avatarUrl || 'https://www.gravatar.com/avatar/00000000000000000000000000000000?d=mp&f=y';
+      document.getElementById('avatarFileInput').value = '';
+      document.getElementById('avatarUrlInput').value = '';
+      switchAvatarTab('upload');
+      modal.classList.add('open');
+      if (window.lucide) lucide.createIcons();
+    }
+
+    function closeAvatarModal() {
+      document.getElementById('avatarModal').classList.remove('open');
+      avatarPendingData = null;
+    }
+
+    function switchAvatarTab(tab) {
+      const uploadPanel = document.getElementById('avatarUploadPanel');
+      const urlPanel = document.getElementById('avatarUrlPanel');
+      const tabUpload = document.getElementById('avatarTabUpload');
+      const tabUrl = document.getElementById('avatarTabUrl');
+      if (tab === 'upload') {
+        uploadPanel.style.display = '';
+        urlPanel.style.display = 'none';
+        tabUpload.classList.remove('btn-secondary');
+        tabUrl.classList.add('btn-secondary');
+      } else {
+        uploadPanel.style.display = 'none';
+        urlPanel.style.display = '';
+        tabUrl.classList.remove('btn-secondary');
+        tabUpload.classList.add('btn-secondary');
+      }
+    }
+
+    function onAvatarFileSelected(input) {
+      const file = input.files?.[0];
+      if (!file) return;
+      if (file.size > 2_097_152) return showToast('Image too large — max 2 MB.');
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const dataUrl = e.target.result;
+        document.getElementById('avatarPreviewImg').src = dataUrl;
+        avatarPendingData = { type: 'upload', data: dataUrl };
+      };
+      reader.readAsDataURL(file);
+    }
+
+    function previewAvatarUrl() {
+      const url = document.getElementById('avatarUrlInput').value.trim();
+      if (/^https?:\/\/.+/i.test(url)) {
+        document.getElementById('avatarPreviewImg').src = url;
+        avatarPendingData = { type: 'url', url };
+      }
+    }
+
+    async function saveAvatar() {
+      if (!avatarPendingData) return showToast('Choose an image or paste a URL first.');
+      const btn = document.getElementById('avatarSaveBtn');
+      btn.disabled = true;
+      btn.textContent = '[ SAVING... ]';
+      try {
+        const res = await fetch('/api/user/avatar', {
+          method: 'POST', credentials: 'same-origin',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(avatarPendingData),
+        });
+        const out = await res.json();
+        if (!res.ok) { showToast(out.error || 'Failed to save.'); return; }
+        // Update avatar in header live without full reload
+        currentUser.avatarUrl = out.avatarUrl;
+        document.querySelectorAll('.user-pill-avatar').forEach(img => img.src = out.avatarUrl);
+        showToast('Profile picture updated!');
+        closeAvatarModal();
+      } catch (e) {
+        showToast('Network error, try again.');
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<i data-lucide="save" style="width:14px;height:14px;"></i> [ SAVE PICTURE ]';
+        if (window.lucide) lucide.createIcons();
+      }
+    }
+
+    // Drag-and-drop support for avatar drop zone
+    document.addEventListener('DOMContentLoaded', () => {
+      const dz = document.getElementById('avatarDropZone');
+      if (!dz) return;
+      dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('drag-over'); });
+      dz.addEventListener('dragleave', () => dz.classList.remove('drag-over'));
+      dz.addEventListener('drop', e => {
+        e.preventDefault(); dz.classList.remove('drag-over');
+        const file = e.dataTransfer.files?.[0];
+        if (!file || !file.type.startsWith('image/')) return showToast('Please drop an image file.');
+        const fakeInput = { files: [file] };
+        onAvatarFileSelected(fakeInput);
+      });
+    });
 
     async function fetchFeed() {
       try {

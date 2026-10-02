@@ -83,6 +83,7 @@ async function getDbData() {
     name: u.name || 'User',
     spotifyProfileName: u.spotifyProfileName || u.name || 'User',
     avatarUrl: u.avatarUrl || '',
+    hasCustomAvatar: u.hasCustomAvatar || false,
     friendCode: u.friendCode || generateFriendCode(u.name),
     friends: Array.isArray(u.friends) ? u.friends : [],
     friendRequestsReceived: Array.isArray(u.friendRequestsReceived) ? u.friendRequestsReceived : [],
@@ -301,7 +302,8 @@ app.get('/callback', async (req, res) => {
       const existing = data.users[userIndex];
       existing.name = displayNameFromLogin || existing.name || spotifyProfileName;
       existing.spotifyProfileName = spotifyProfileName;
-      existing.avatarUrl = avatarUrl || existing.avatarUrl;
+      // Only update avatar from Spotify if the user hasn't set a custom one
+      if (!existing.hasCustomAvatar) existing.avatarUrl = avatarUrl || existing.avatarUrl;
       existing.accessToken = access_token;
       if (refresh_token) existing.refreshToken = refresh_token;
       existing.expiresAt = Date.now() + expires_in * 1000;
@@ -464,6 +466,50 @@ app.put('/api/user/status', async (req, res) => {
     }
     res.status(404).json({ error: 'User not found' });
   } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// --- Update Avatar ---
+app.post('/api/user/avatar', async (req, res) => {
+  try {
+    const user = await getAuthenticatedUser(req);
+    if (!user) return res.status(401).json({ error: 'Not authenticated' });
+
+    const { type, data: imgData, url } = req.body;
+    let newAvatarUrl = '';
+
+    if (type === 'url') {
+      if (!/^https?:\/\/.+/i.test(url || '')) return res.status(400).json({ error: 'Invalid URL — must start with http(s)://' });
+      newAvatarUrl = url.trim();
+    } else if (type === 'upload') {
+      // imgData is a base64 data URL: "data:image/jpeg;base64,..."
+      const match = (imgData || '').match(/^data:(image\/(jpeg|png|gif|webp));base64,(.+)$/s);
+      if (!match) return res.status(400).json({ error: 'Invalid image data.' });
+      const mime = match[1], ext = match[2], b64 = match[3];
+      const buf = Buffer.from(b64, 'base64');
+      if (buf.length > 2_097_152) return res.status(400).json({ error: 'Image too large — max 2 MB.' });
+
+      const uploadDir = path.join(__dirname, 'public', 'uploads');
+      fs.mkdirSync(uploadDir, { recursive: true });
+      // One file per user — overwrites old custom avatar automatically
+      const filename = `avatar_${user.spotifyId.replace(/[^a-z0-9]/gi, '_')}.${ext}`;
+      fs.writeFileSync(path.join(uploadDir, filename), buf);
+      newAvatarUrl = `/uploads/${filename}`;
+    } else {
+      return res.status(400).json({ error: 'type must be "url" or "upload"' });
+    }
+
+    const dbData = await getDbData();
+    const idx = dbData.users.findIndex((u) => u.spotifyId === user.spotifyId);
+    if (idx === -1) return res.status(404).json({ error: 'User not found' });
+    dbData.users[idx].avatarUrl = newAvatarUrl;
+    dbData.users[idx].hasCustomAvatar = true;
+    await saveDbData(dbData);
+
+    res.json({ success: true, avatarUrl: newAvatarUrl });
+  } catch (err) {
+    console.error('Avatar update error:', err.message);
     res.status(500).json({ error: err.message });
   }
 });
