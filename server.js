@@ -402,6 +402,14 @@ app.get('/api/me', async (req, res) => {
       };
     });
 
+    // Include linked YT Music account info if this is a Spotify session with a linked YT account
+    const linkedYtId = req.session?.linkedYtId;
+    let linkedYtAccount = null;
+    if (linkedYtId) {
+      const ytUser = data.users.find((u) => u.spotifyId === linkedYtId);
+      if (ytUser) linkedYtAccount = { spotifyId: ytUser.spotifyId, name: ytUser.name, source: 'ytmusic' };
+    }
+
     res.json({
       spotifyId: user.spotifyId,
       name: user.name,
@@ -410,10 +418,12 @@ app.get('/api/me', async (req, res) => {
       friendCode: user.friendCode,
       statusMessage: user.statusMessage,
       statusEmoji: user.statusEmoji,
+      source: user.source || 'spotify',
       friends: friendsDetails,
       friendRequestsReceived: receivedRequests,
       friendRequestsSent: user.friendRequestsSent,
       totalUsersCount: data.users.length,
+      linkedYtAccount,
     });
   } catch (err) {
     console.error('Error fetching current user profile:', err);
@@ -460,6 +470,9 @@ app.get('/api/feed', async (req, res) => {
     if (currentUser) {
       const friendIds = new Set(currentUser.friends);
       friendIds.add(currentUser.spotifyId);
+      // Also show the linked YT Music account side-by-side in the same feed
+      const linkedYtId = req.session?.linkedYtId;
+      if (linkedYtId) friendIds.add(linkedYtId);
       targetUsers = data.users.filter((u) => friendIds.has(u.spotifyId));
     } else {
       targetUsers = data.users.slice(0, 10);
@@ -647,36 +660,59 @@ app.post('/api/ytmusic/connect', async (req, res) => {
 
     const data = await getDbData();
     const sessionId = req.session?.spotifyId;
+    const sessionUser = sessionId ? data.users.find((u) => u.spotifyId === sessionId) : null;
 
+    // --- Case A: Already logged in as a Spotify user → link YT as a second account ---
+    if (sessionUser && sessionUser.source === 'spotify') {
+      const linkedYtId = req.session.linkedYtId;
+
+      // Find existing linked YT account (reconnect) or by name (duplicate guard)
+      let ytIdx = linkedYtId ? data.users.findIndex((u) => u.spotifyId === linkedYtId) : -1;
+      if (ytIdx === -1 && name) {
+        ytIdx = data.users.findIndex(
+          (u) => u.source === 'ytmusic' && u.name.toLowerCase() === name.toLowerCase()
+        );
+      }
+
+      if (ytIdx > -1) {
+        data.users[ytIdx].ytAuthEnc = result.authEnc;
+      } else {
+        if (!name) return res.status(400).json({ error: 'Please enter a display name for your YT Music account.' });
+        const id = 'yt_' + crypto.randomBytes(8).toString('hex');
+        data.users.push({
+          spotifyId: id, name, spotifyProfileName: name, avatarUrl: '',
+          friendCode: generateFriendCode(name), friends: [], friendRequestsReceived: [], friendRequestsSent: [],
+          statusMessage: 'Also on YT Music 🎧', statusEmoji: '🎶',
+          source: 'ytmusic', ytAuthEnc: result.authEnc, topArtists: [], topGenres: [],
+          createdAt: new Date().toISOString(),
+        });
+        ytIdx = data.users.length - 1;
+      }
+
+      await saveDbData(data);
+      const ytUser = data.users[ytIdx];
+      ytm.seed(ytUser.spotifyId, result.item);
+      // Keep the Spotify session intact; just add the YT account as secondary
+      req.session.linkedYtId = ytUser.spotifyId;
+      return res.json({ success: true, linked: true, userId: ytUser.spotifyId, ytName: ytUser.name });
+    }
+
+    // --- Case B: Not logged in, or already a YT-only session ---
     // Priority 1: Existing YT Music user from session (reconnect credentials)
     let idx = data.users.findIndex((u) => u.spotifyId === sessionId && u.source === 'ytmusic');
-
-    // Priority 2: Existing Spotify user already in session — promote to include YT (shouldn't normally happen, but guard)
-    if (idx === -1 && sessionId) {
-      const existingSessionUser = data.users.findIndex((u) => u.spotifyId === sessionId);
-      if (existingSessionUser > -1) {
-        // They're already logged in as a different account; just update credentials if ytmusic source
-        if (data.users[existingSessionUser].source === 'ytmusic') {
-          idx = existingSessionUser;
-          data.users[idx].ytAuthEnc = result.authEnc;
-        }
-      }
-    }
 
     if (idx > -1) {
       // Reconnect: update credentials only
       data.users[idx].ytAuthEnc = result.authEnc;
     } else {
-      // New YT Music user — name is required
+      // New standalone YT Music user — name is required
       if (!name) return res.status(400).json({ error: 'Please enter your name.' });
 
-      // Duplicate-login guard: check if a YT Music user with the same display name already exists
-      // (covers the case where someone submits twice or reconnects from a fresh browser)
+      // Duplicate-login guard
       const dupIdx = data.users.findIndex(
         (u) => u.source === 'ytmusic' && u.name.toLowerCase() === name.toLowerCase()
       );
       if (dupIdx > -1) {
-        // Restore session to the existing account and refresh credentials
         data.users[dupIdx].ytAuthEnc = result.authEnc;
         idx = dupIdx;
       } else {
@@ -709,6 +745,19 @@ app.post('/api/ytmusic/connect', async (req, res) => {
     console.error('YT connect error:', err.message);
     res.status(500).json({ error: 'Something went wrong connecting YT Music.' });
   }
+});
+
+// Unlink the secondary YT Music account from a Spotify session
+app.delete('/api/ytmusic/unlink', async (req, res) => {
+  const linkedYtId = req.session?.linkedYtId;
+  if (!linkedYtId) return res.status(400).json({ error: 'No linked YT Music account.' });
+  // Wipe the credentials so the YT poller stops for this account
+  const data = await getDbData();
+  const u = data.users.find((x) => x.spotifyId === linkedYtId);
+  if (u) { u.ytAuthEnc = ''; await saveDbData(data); }
+  ytm.forget(linkedYtId);
+  req.session.linkedYtId = null;
+  res.json({ success: true });
 });
 
 app.delete('/api/ytmusic/credentials', async (req, res) => {

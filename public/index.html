@@ -1275,6 +1275,15 @@
             </button>
           </div>
 
+          <!-- YT Music Link Panel (only shown for Spotify users) -->
+          <div class="panel-card" id="ytLinkPanel" style="display:none;">
+            <div class="panel-title-lg">
+              <i data-lucide="music-2" style="width: 18px; height: 18px;"></i>
+              <span>// LINK YOUTUBE MUSIC</span>
+            </div>
+            <div id="ytLinkPanelBody"></div>
+          </div>
+
           <div class="panel-card">
             <div class="panel-title-lg">
               <i data-lucide="user-plus" style="width: 18px; height: 18px;"></i>
@@ -1520,6 +1529,7 @@
         }
         currentUser = await res.json();
         renderHeaderUser();
+        renderYtLinkPanel();
         updateFriendsView();
       } catch (err) {
         console.error('Error fetching current user:', err);
@@ -1609,9 +1619,10 @@
       if (window.lucide) lucide.createIcons();
     }
 
-    async function connectYtMusic(textareaId) {
+    async function connectYtMusic(textareaId, nameInputId) {
       const headers = document.getElementById(textareaId)?.value || '';
-      const name = document.getElementById('ytNameInput')?.value || '';
+      const nameId = nameInputId || 'ytNameInput';
+      const name = document.getElementById(nameId)?.value?.trim() || '';
       if (!headers.trim()) return showToast('Paste your headers first.');
       try {
         const res = await fetch('/api/ytmusic/connect', {
@@ -1621,8 +1632,73 @@
         });
         const out = await res.json();
         if (!res.ok) return showToast(out.error || 'Could not connect.');
-        window.location.href = '/?connected=' + encodeURIComponent(name || 'YT Music');
+        if (out.linked) {
+          // Spotify user just linked a YT account — refresh profile, no full reload
+          showToast(`YT Music linked as "${out.ytName}" — both cards now appear in your feed!`);
+          await loadUserProfile();
+          await fetchFeed();
+        } else {
+          window.location.href = '/?connected=' + encodeURIComponent(name || 'YT Music');
+        }
       } catch (e) { showToast('Network error, try again.'); }
+    }
+
+    async function unlinkYtMusic() {
+      if (!confirm('Unlink your YouTube Music account? It will stop appearing in the feed.')) return;
+      try {
+        const res = await fetch('/api/ytmusic/unlink', { method: 'DELETE', credentials: 'same-origin' });
+        const out = await res.json();
+        if (!res.ok) return showToast(out.error || 'Could not unlink.');
+        showToast('YT Music account unlinked.');
+        await loadUserProfile();
+        await fetchFeed();
+      } catch (e) { showToast('Network error, try again.'); }
+    }
+
+    function renderYtLinkPanel() {
+      const panel = document.getElementById('ytLinkPanel');
+      const body = document.getElementById('ytLinkPanelBody');
+      if (!panel || !body) return;
+
+      // Only show for Spotify users
+      if (!currentUser || currentUser.source !== 'spotify') {
+        panel.style.display = 'none';
+        return;
+      }
+
+      panel.style.display = 'block';
+
+      if (currentUser.linkedYtAccount) {
+        // Already linked — show badge + unlink
+        const { name } = currentUser.linkedYtAccount;
+        body.innerHTML = `
+          <div style="display:flex; align-items:center; gap:10px; margin-bottom:12px;">
+            <span style="font-size:1.3rem;">🎶</span>
+            <div>
+              <div style="font-family:var(--font-mono); font-size:0.85rem; font-weight:600;">${escapeHTML(name)}</div>
+              <div style="font-size:0.75rem; color:var(--secondary);">YT Music account linked — visible in feed</div>
+            </div>
+          </div>
+          <button class="btn btn-sm" style="width:100%; color:var(--secondary); border-color:var(--border);" onclick="unlinkYtMusic()">
+            <i data-lucide="unlink" style="width:13px;height:13px;"></i>
+            <span>[ UNLINK YT MUSIC ]</span>
+          </button>
+        `;
+      } else {
+        // Not linked yet — show connect form
+        body.innerHTML = `
+          <p style="font-size:0.78rem; color:var(--secondary); margin-bottom:12px; font-family:var(--font-mono); line-height:1.55;">
+            Open music.youtube.com (logged in) &rarr; DevTools F12 &rarr; Network &rarr; filter &ldquo;browse&rdquo; &rarr; right-click POST request &rarr; copy request headers &rarr; paste below.
+          </p>
+          <input id="ytLinkNameInput" class="input-field" placeholder="YT DISPLAY NAME (e.g. Sid-YT)" style="margin-bottom:8px;" />
+          <textarea id="ytLinkHeaders" class="input-field" rows="4" placeholder="PASTE REQUEST HEADERS HERE"></textarea>
+          <button class="btn" style="margin-top:10px; width:100%;" onclick="connectYtMusic('ytLinkHeaders','ytLinkNameInput')">
+            <i data-lucide="link" style="width:14px;height:14px;"></i>
+            <span>[ LINK YT MUSIC ACCOUNT ]</span>
+          </button>
+        `;
+      }
+      if (window.lucide) lucide.createIcons();
     }
 
     function connectFromFeedCard() {
@@ -1708,7 +1784,9 @@
 
       container.innerHTML = filtered.map(friend => {
         const isMe = friend.spotifyId === currentUser.spotifyId;
-        const name = escapeHTML(friend.name) + (isMe ? ' (YOU)' : '');
+        const isLinkedYt = currentUser.linkedYtAccount && friend.spotifyId === currentUser.linkedYtAccount.spotifyId;
+        const youLabel = isMe ? ' (YOU · SPOTIFY)' : (isLinkedYt ? ' (YOU · YT)' : '');
+        const name = escapeHTML(friend.name) + youLabel;
         const avatar = friend.avatarUrl || 'https://www.gravatar.com/avatar/00000000000000000000000000000000?d=mp&f=y';
         const customStatus = friend.statusMessage ? `${friend.statusEmoji || '🎧'} ${escapeHTML(friend.statusMessage)}` : '';
 
