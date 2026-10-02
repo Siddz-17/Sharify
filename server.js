@@ -1530,6 +1530,32 @@ app.delete('/api/admin/users/:id', requireAdmin, async (req, res) => {
   res.json({ success: true, name });
 });
 
+// Admin: re-connect a YT Music user's headers on their behalf
+app.post('/api/admin/users/:id/ytmusic', requireAdmin, async (req, res) => {
+  try {
+    const { headers: rawHeaders } = req.body;
+    if (!rawHeaders || !rawHeaders.trim()) return res.status(400).json({ error: 'No headers provided.' });
+
+    // Validate headers via Python — same flow as user self-connect
+    const result = await ytm.connect(rawHeaders);
+    if (!result.ok) return res.status(400).json({ error: result.error || 'Headers invalid or YT Music unreachable.' });
+
+    const data = await getDbData();
+    const u = data.users.find((x) => x.spotifyId === req.params.id);
+    if (!u) return res.status(404).json({ error: 'User not found.' });
+
+    u.ytAuthEnc = result.authEnc;
+    await saveDbData(data);
+
+    // Seed the in-memory cache immediately so polling resumes right away
+    ytm.seed(req.params.id, result.item);
+
+    res.json({ success: true, name: u.name });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // --- Admin Dashboard Page ---
 app.get('/admin', requireAdmin, async (req, res) => {
   res.send(`<!DOCTYPE html>
@@ -1555,6 +1581,8 @@ header{border-bottom:1px solid #1a1a1a;padding:16px 28px;display:flex;align-item
 .btn-warn:hover{background:#78350f;color:#fff;border-color:#78350f}
 .btn-ok{border-color:#14532d;color:#4ade80}
 .btn-ok:hover{background:#14532d;color:#fff;border-color:#14532d}
+.btn-yt{border-color:#7f1d1d;color:#fca5a5}
+.btn-yt:hover{background:#991b1b;color:#fff;border-color:#991b1b}
 main{padding:28px;max-width:1200px;margin:0 auto}
 .stats-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:14px;margin-bottom:28px}
 .stat-card{border:1px solid #1a1a1a;padding:18px;background:#050505}
@@ -1689,6 +1717,7 @@ function renderTable() {
       <td>\${statusBadge}</td>
       <td><div class="actions">
         \${banBtn}
+        \${u.source === 'ytmusic' ? \`<button class="btn-sm btn-yt" onclick="openYtFix('\${u.spotifyId}','\${esc(u.name)}')">[ FIX YT ]</button>\` : ''}
         <button class="btn-sm btn-danger" onclick="removeUser('\${u.spotifyId}','\${esc(u.name)}')">[ REMOVE ]</button>
       </div></td>
     </tr>\`;
@@ -1727,6 +1756,50 @@ async function removeUser(id, name) {
   updateStats(); renderTable();
 }
 
+// ---- YT Fix Modal ----
+let _ytFixId = null;
+
+function openYtFix(id, name) {
+  _ytFixId = id;
+  document.getElementById('ytFixName').textContent = name;
+  document.getElementById('ytFixHeaders').value = '';
+  document.getElementById('ytFixStatus').textContent = '';
+  document.getElementById('ytFixModal').style.display = 'flex';
+}
+
+function closeYtFix() {
+  document.getElementById('ytFixModal').style.display = 'none';
+  _ytFixId = null;
+}
+
+async function submitYtFix() {
+  const headers = document.getElementById('ytFixHeaders').value.trim();
+  const status = document.getElementById('ytFixStatus');
+  const btn = document.getElementById('ytFixBtn');
+  if (!headers) { status.textContent = 'Paste headers first.'; status.style.color='#f87171'; return; }
+  btn.disabled = true; btn.textContent = '[ VALIDATING... ]';
+  status.textContent = 'Running Python check — this takes ~5s...';
+  status.style.color = '#888';
+  try {
+    const res = await fetch('/api/admin/users/' + _ytFixId + '/ytmusic', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ headers }),
+    });
+    const d = await res.json();
+    if (!res.ok) {
+      status.textContent = '✗ ' + (d.error || 'Failed.');
+      status.style.color = '#f87171';
+    } else {
+      status.textContent = '✓ Connected! ' + d.name + ' is live.';
+      status.style.color = '#4ade80';
+      setTimeout(closeYtFix, 1800);
+      loadUsers();
+    }
+  } catch(e) { status.textContent = 'Network error.'; status.style.color='#f87171'; }
+  finally { btn.disabled = false; btn.textContent = '[ APPLY HEADERS ]'; }
+}
+
 function showToast(msg) {
   const t = document.getElementById('toast');
   t.textContent = msg;
@@ -1737,6 +1810,26 @@ function showToast(msg) {
 loadUsers();
 setInterval(loadUsers, 30000); // auto-refresh every 30s
 </script>
+
+<!-- YT Fix Modal -->
+<div id="ytFixModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:9999;align-items:center;justify-content:center;">
+  <div style="background:#0a0a0a;border:1px solid #2a2a2a;padding:32px;max-width:520px;width:100%;margin:16px;position:relative;">
+    <button onclick="closeYtFix()" style="position:absolute;top:12px;right:14px;background:none;border:none;color:#555;cursor:pointer;font-size:1.1rem;">✕</button>
+    <div style="font-family:'JetBrains Mono',monospace;font-size:.9rem;letter-spacing:.2em;text-transform:uppercase;margin-bottom:6px;">// FIX YT MUSIC</div>
+    <p style="font-family:'JetBrains Mono',monospace;font-size:.75rem;color:#555;margin-bottom:18px;">Updating headers for <span id="ytFixName" style="color:#fbbf24;"></span></p>
+    <p style="font-size:.75rem;color:#555;font-family:'JetBrains Mono',monospace;margin-bottom:10px;">
+      Open music.youtube.com → DevTools (F12) → Network → filter "browse" → right-click a POST → Copy → Paste request headers below.
+    </p>
+    <textarea id="ytFixHeaders" rows="7" placeholder="PASTE REQUEST HEADERS HERE"
+      style="width:100%;background:#050505;border:1px solid #2a2a2a;color:#ccc;padding:10px;font-family:'JetBrains Mono',monospace;font-size:.75rem;resize:vertical;outline:none;margin-bottom:10px;"></textarea>
+    <div id="ytFixStatus" style="font-family:'JetBrains Mono',monospace;font-size:.75rem;min-height:18px;margin-bottom:12px;"></div>
+    <button id="ytFixBtn" onclick="submitYtFix()"
+      style="width:100%;background:#fff;color:#000;border:none;padding:11px;font-family:'JetBrains Mono',monospace;font-size:.8rem;font-weight:600;letter-spacing:.15em;text-transform:uppercase;cursor:pointer;">
+      [ APPLY HEADERS ]
+    </button>
+  </div>
+</div>
+
 </body></html>`);
 });
 
