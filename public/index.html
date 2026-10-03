@@ -1,10 +1,11 @@
 <!DOCTYPE html>
 <html lang="en" class="dark">
+
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Sharify // Social Audio Hub</title>
-  
+
   <!-- PWA meta tags -->
   <link rel="manifest" href="/manifest.json" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
@@ -15,8 +16,10 @@
   <!-- Google Fonts: DotGothic16, Inter & JetBrains Mono (Nothing OS Aesthetic) -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=DotGothic16&family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-  
+  <link
+    href="https://fonts.googleapis.com/css2?family=DotGothic16&family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap"
+    rel="stylesheet">
+
   <!-- Lucide Icons -->
   <script src="https://unpkg.com/lucide@latest"></script>
   <!-- Socket.IO Client -->
@@ -108,12 +111,15 @@
       width: 5px;
       height: 5px;
     }
+
     ::-webkit-scrollbar-track {
       background: var(--background);
     }
+
     ::-webkit-scrollbar-thumb {
       background: var(--border);
     }
+
     ::-webkit-scrollbar-thumb:hover {
       background: var(--secondary);
     }
@@ -154,6 +160,7 @@
       justify-content: center;
       transition: all 0.15s ease;
     }
+
     .brand-logo:hover {
       background: var(--foreground);
       color: var(--background);
@@ -226,6 +233,7 @@
       padding: 1px 6px;
       font-weight: 700;
     }
+
     .nav-tab.active .tab-badge {
       background: var(--background);
       color: var(--foreground);
@@ -249,6 +257,7 @@
       cursor: pointer;
       transition: all 0.15s ease;
     }
+
     .theme-toggle-btn:hover {
       background: var(--foreground);
       color: var(--background);
@@ -294,6 +303,7 @@
       gap: 6px;
       transition: all 0.15s ease;
     }
+
     .status-badge-btn:hover {
       border-color: var(--foreground);
       color: var(--foreground);
@@ -315,6 +325,7 @@
       gap: 6px;
       transition: all 0.15s ease;
     }
+
     .friend-code-badge:hover {
       background: var(--foreground);
       color: var(--background);
@@ -325,12 +336,21 @@
       display: none;
       animation: fadeIn 0.2s ease;
     }
+
     .tab-content.active {
       display: block;
     }
+
     @keyframes fadeIn {
-      from { opacity: 0; transform: translateY(4px); }
-      to { opacity: 1; transform: translateY(0); }
+      from {
+        opacity: 0;
+        transform: translateY(4px);
+      }
+
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
     }
 
     /* Unauth Hero Card */
@@ -343,6 +363,7 @@
       margin: 40px auto;
       position: relative;
     }
+
     .unauth-card::before {
       content: '// SYSTEM ACCESS';
       position: absolute;
@@ -355,6 +376,7 @@
       letter-spacing: 0.2em;
       color: var(--secondary);
     }
+
     .unauth-card h2 {
       font-family: var(--font-dot);
       font-size: 1.8rem;
@@ -364,11 +386,13 @@
       font-weight: 700;
       color: var(--foreground);
     }
+
     .unauth-card p {
       color: var(--secondary);
       margin-bottom: 24px;
       font-size: 0.92rem;
     }
+
     .connect-form {
       display: flex;
       flex-direction: column;
@@ -396,11 +420,13 @@
       transition: all 0.15s ease;
       text-decoration: none;
     }
+
     .btn:hover {
       background: var(--background);
       color: var(--foreground);
       border-color: var(--foreground);
     }
+
     .btn-secondary {
       background: var(--card);
       color: var(--foreground);
@@ -409,11 +435,13 @@
       text-transform: uppercase;
       letter-spacing: 0.15em;
     }
+
     .btn-secondary:hover {
       background: var(--foreground);
       color: var(--background);
       border-color: var(--foreground);
     }
+
     .btn-purple {
       background: var(--card);
       color: var(--foreground);
@@ -422,11 +450,13 @@
       text-transform: uppercase;
       letter-spacing: 0.15em;
     }
+
     .btn-purple:hover {
       background: var(--foreground);
       color: var(--background);
       border-color: var(--foreground);
     }
+
     .btn-sm {
       padding: 6px 12px;
       font-size: 0.75rem;
@@ -443,10 +473,12 @@
       font-family: var(--font-inter);
       transition: border-color 0.15s ease;
     }
+
     .input-field:focus {
       outline: none;
       border-color: var(--foreground);
     }
+
     .input-field::placeholder {
       color: var(--secondary);
     }
@@ -459,6 +491,7 @@
       gap: 12px;
       flex-wrap: wrap;
     }
+
     .feed-actions-right {
       display: flex;
       align-items: center;
@@ -482,10 +515,12 @@
       position: relative;
       transition: border-color 0.15s ease, background 0.15s ease;
     }
+
     .friend-card:hover {
       border-color: var(--foreground);
       background: var(--hover);
     }
+
     .friend-card.active-glow {
       border-color: var(--foreground);
     }
@@ -501,17 +536,20 @@
       justify-content: space-between;
       margin-bottom: 16px;
     }
+
     .user-info-area {
       display: flex;
       align-items: center;
       gap: 12px;
     }
+
     .avatar-wrapper {
       position: relative;
       width: 40px;
       height: 40px;
       flex-shrink: 0;
     }
+
     .avatar-img {
       width: 100%;
       height: 100%;
@@ -519,9 +557,11 @@
       background: var(--muted);
       border: 1px solid var(--border);
     }
+
     .active-glow .avatar-img {
       border-color: var(--foreground);
     }
+
     .live-dot {
       position: absolute;
       bottom: -2px;
@@ -532,13 +572,22 @@
       border: 1px solid var(--background);
       display: none;
     }
+
     .active-glow .live-dot {
       display: block;
       animation: pulse-dot 1.2s infinite ease-in-out;
     }
+
     @keyframes pulse-dot {
-      0%, 100% { opacity: 0.4; }
-      50% { opacity: 1; }
+
+      0%,
+      100% {
+        opacity: 0.4;
+      }
+
+      50% {
+        opacity: 1;
+      }
     }
 
     .user-name-title {
@@ -552,6 +601,7 @@
       align-items: center;
       gap: 6px;
     }
+
     .user-custom-status {
       font-family: var(--font-mono);
       font-size: 0.72rem;
@@ -574,11 +624,13 @@
       align-items: center;
       gap: 6px;
     }
+
     .status-badge.live {
       background: var(--foreground);
       color: var(--background);
       border: 1px solid var(--foreground);
     }
+
     .status-badge.offline {
       background: transparent;
       color: var(--secondary);
@@ -592,18 +644,41 @@
       gap: 2.5px;
       height: 12px;
     }
+
     .eq-bar {
       width: 2px;
       background: var(--foreground);
       animation: equalize 0.9s infinite ease-in-out alternate;
     }
-    .eq-bar:nth-child(1) { height: 50%; animation-delay: 0.1s; }
-    .eq-bar:nth-child(2) { height: 100%; animation-delay: 0.3s; }
-    .eq-bar:nth-child(3) { height: 35%; animation-delay: 0.15s; }
-    .eq-bar:nth-child(4) { height: 80%; animation-delay: 0.4s; }
+
+    .eq-bar:nth-child(1) {
+      height: 50%;
+      animation-delay: 0.1s;
+    }
+
+    .eq-bar:nth-child(2) {
+      height: 100%;
+      animation-delay: 0.3s;
+    }
+
+    .eq-bar:nth-child(3) {
+      height: 35%;
+      animation-delay: 0.15s;
+    }
+
+    .eq-bar:nth-child(4) {
+      height: 80%;
+      animation-delay: 0.4s;
+    }
+
     @keyframes equalize {
-      0% { height: 15%; }
-      100% { height: 100%; }
+      0% {
+        height: 15%;
+      }
+
+      100% {
+        height: 100%;
+      }
     }
 
     .track-details-row {
@@ -611,6 +686,7 @@
       gap: 16px;
       margin-bottom: 16px;
     }
+
     .album-art-wrap {
       position: relative;
       width: 72px;
@@ -618,6 +694,7 @@
       border: 1px solid var(--border);
       flex-shrink: 0;
     }
+
     .album-art {
       width: 100%;
       height: 100%;
@@ -625,6 +702,7 @@
       background: var(--muted);
       display: block;
     }
+
     .track-info-col {
       min-width: 0;
       display: flex;
@@ -632,6 +710,7 @@
       justify-content: center;
       flex: 1;
     }
+
     .track-title {
       font-weight: 600;
       font-size: 0.95rem;
@@ -642,9 +721,11 @@
       margin-bottom: 3px;
       text-decoration: none;
     }
+
     .track-title:hover {
       text-decoration: underline;
     }
+
     .track-artist {
       font-size: 0.82rem;
       color: var(--secondary);
@@ -653,6 +734,7 @@
       text-overflow: ellipsis;
       margin-bottom: 2px;
     }
+
     .track-album {
       font-family: var(--font-mono);
       font-size: 0.72rem;
@@ -667,6 +749,7 @@
       width: 100%;
       margin-bottom: 14px;
     }
+
     .progress-bar-bg {
       width: 100%;
       height: 2px;
@@ -674,12 +757,14 @@
       overflow: hidden;
       margin-bottom: 6px;
     }
+
     .progress-bar-fill {
       height: 100%;
       width: 0%;
       background: var(--foreground);
       transition: width 1s linear;
     }
+
     .progress-time-row {
       display: flex;
       justify-content: space-between;
@@ -696,6 +781,7 @@
       margin-bottom: 12px;
       flex-wrap: wrap;
     }
+
     .action-pill-btn {
       background: var(--card);
       border: 1px solid var(--border);
@@ -712,16 +798,19 @@
       gap: 6px;
       transition: all 0.15s ease;
     }
+
     .action-pill-btn:hover {
       background: var(--foreground);
       color: var(--background);
       border-color: var(--foreground);
     }
+
     .action-pill-btn.sync-btn {
       background: var(--muted);
       border-color: var(--foreground);
       color: var(--foreground);
     }
+
     .action-pill-btn.sync-btn:hover {
       background: var(--foreground);
       color: var(--background);
@@ -734,6 +823,7 @@
       border-top: 1px solid var(--border);
       padding-top: 12px;
     }
+
     .reaction-btn {
       background: var(--card);
       border: 1px solid var(--border);
@@ -742,6 +832,7 @@
       cursor: pointer;
       transition: all 0.15s ease;
     }
+
     .reaction-btn:hover {
       border-color: var(--foreground);
       background: var(--foreground);
@@ -757,16 +848,32 @@
       animation: floatUp 1.6s cubic-bezier(0.215, 0.61, 0.355, 1) forwards;
       z-index: 100;
     }
+
     @keyframes floatUp {
-      0% { transform: translateY(0) scale(0.6); opacity: 0; }
-      20% { opacity: 1; transform: translateY(-20px) scale(1.1); }
-      80% { opacity: 0.9; }
-      100% { transform: translateY(-140px) scale(1.3); opacity: 0; }
+      0% {
+        transform: translateY(0) scale(0.6);
+        opacity: 0;
+      }
+
+      20% {
+        opacity: 1;
+        transform: translateY(-20px) scale(1.1);
+      }
+
+      80% {
+        opacity: 0.9;
+      }
+
+      100% {
+        transform: translateY(-140px) scale(1.3);
+        opacity: 0;
+      }
     }
 
     .card-offline {
       opacity: 0.75;
     }
+
     .card-offline .avatar-img {
       filter: grayscale(100%);
     }
@@ -780,6 +887,7 @@
       border: 1px solid var(--border);
       overflow: hidden;
     }
+
     .chat-back-btn {
       display: none;
     }
@@ -792,6 +900,7 @@
       flex-direction: column;
       gap: 16px;
     }
+
     .sidebar-heading {
       font-family: var(--font-dot);
       font-size: 0.75rem;
@@ -800,11 +909,13 @@
       letter-spacing: 0.18em;
       color: var(--secondary);
     }
+
     .channel-list {
       display: flex;
       flex-direction: column;
       gap: 4px;
     }
+
     .channel-btn {
       background: transparent;
       border: 1px solid transparent;
@@ -822,11 +933,13 @@
       transition: all 0.15s ease;
       text-align: left;
     }
+
     .channel-btn:hover {
       background: var(--hover);
       color: var(--foreground);
       border-color: var(--border);
     }
+
     .channel-btn.active {
       background: var(--foreground);
       border-color: var(--foreground);
@@ -840,6 +953,7 @@
       height: 100%;
       background: var(--background);
     }
+
     .chat-header {
       padding: 14px 20px;
       border-bottom: 1px solid var(--border);
@@ -848,6 +962,7 @@
       justify-content: space-between;
       background: var(--card);
     }
+
     .chat-channel-title {
       font-family: var(--font-dot);
       letter-spacing: 0.15em;
@@ -859,6 +974,7 @@
       gap: 8px;
       color: var(--foreground);
     }
+
     .chat-messages-stream {
       flex: 1;
       overflow-y: auto;
@@ -867,16 +983,19 @@
       flex-direction: column;
       gap: 12px;
     }
+
     .chat-bubble {
       display: flex;
       gap: 12px;
       max-width: 85%;
       animation: fadeIn 0.15s ease;
     }
+
     .chat-bubble.mine {
       align-self: flex-end;
       flex-direction: row-reverse;
     }
+
     .chat-bubble-avatar {
       width: 30px;
       height: 30px;
@@ -884,16 +1003,19 @@
       border: 1px solid var(--border);
       flex-shrink: 0;
     }
+
     .chat-bubble-body {
       background: var(--card);
       border: 1px solid var(--border);
       padding: 10px 14px;
       position: relative;
     }
+
     .chat-bubble.mine .chat-bubble-body {
       border-color: var(--foreground);
       background: var(--hover);
     }
+
     .chat-bubble-author {
       font-family: var(--font-dot);
       letter-spacing: 0.12em;
@@ -903,11 +1025,13 @@
       color: var(--foreground);
       margin-bottom: 3px;
     }
+
     .chat-bubble-text {
       font-size: 0.88rem;
       color: var(--foreground);
       word-break: break-word;
     }
+
     .chat-bubble-time {
       font-family: var(--font-mono);
       font-size: 0.65rem;
@@ -926,16 +1050,19 @@
       gap: 10px;
       max-width: 320px;
     }
+
     .chat-song-art {
       width: 38px;
       height: 38px;
       object-fit: cover;
       border: 1px solid var(--border);
     }
+
     .chat-song-meta {
       min-width: 0;
       flex: 1;
     }
+
     .chat-song-name {
       font-size: 0.82rem;
       font-weight: 600;
@@ -944,6 +1071,7 @@
       overflow: hidden;
       text-overflow: ellipsis;
     }
+
     .chat-song-artist {
       font-size: 0.72rem;
       color: var(--secondary);
@@ -960,6 +1088,7 @@
       gap: 10px;
       align-items: center;
     }
+
     .typing-indicator {
       font-family: var(--font-mono);
       font-size: 0.72rem;
@@ -975,16 +1104,19 @@
       grid-template-columns: 340px 1fr;
       gap: 24px;
     }
+
     @media (max-width: 880px) {
       .friends-view-layout {
         grid-template-columns: 1fr;
       }
     }
+
     .panel-card {
       background: var(--card);
       border: 1px solid var(--border);
       padding: 24px;
     }
+
     .panel-title-lg {
       font-family: var(--font-dot);
       letter-spacing: 0.15em;
@@ -997,6 +1129,7 @@
       gap: 10px;
       color: var(--foreground);
     }
+
     .friend-request-item {
       display: flex;
       align-items: center;
@@ -1023,9 +1156,11 @@
       opacity: 0;
       transition: opacity 0.2s ease;
     }
+
     .modal-backdrop.show {
       opacity: 1;
     }
+
     .modal-content {
       background: var(--card);
       border: 1px solid var(--foreground);
@@ -1036,9 +1171,11 @@
       transform: translateY(12px);
       transition: transform 0.2s ease;
     }
+
     .modal-backdrop.show .modal-content {
       transform: translateY(0);
     }
+
     .modal-close {
       position: absolute;
       top: 18px;
@@ -1054,6 +1191,7 @@
       cursor: pointer;
       transition: all 0.15s ease;
     }
+
     .modal-close:hover {
       background: var(--foreground);
       color: var(--background);
@@ -1081,6 +1219,7 @@
       opacity: 0;
       transition: all 0.2s ease;
     }
+
     .toast.show {
       transform: translateY(0);
       opacity: 1;
@@ -1097,6 +1236,7 @@
       align-items: center;
       gap: 12px;
     }
+
     .empty-state h3 {
       font-family: var(--font-dot);
       letter-spacing: 0.18em;
@@ -1109,6 +1249,7 @@
       body {
         padding: 16px 12px 100px;
       }
+
       header {
         flex-direction: column;
         align-items: stretch;
@@ -1116,72 +1257,113 @@
         padding-bottom: 16px;
         margin-bottom: 20px;
       }
+
       .brand-section {
         justify-content: space-between;
       }
+
       .nav-tabs {
         width: 100%;
         overflow-x: auto;
       }
+
       .nav-tab {
         padding: 8px 12px;
         font-size: 0.76rem;
         flex: 1;
         justify-content: center;
       }
+
       .lounge-container {
         grid-template-columns: 1fr;
         height: 600px;
       }
+
       .lounge-sidebar {
         display: block !important;
         border-right: none;
         height: 100%;
       }
+
       .lounge-chat-area {
         display: none !important;
         height: 100%;
         flex-direction: column;
       }
+
       .lounge-container.show-chat .lounge-sidebar {
         display: none !important;
       }
+
       .lounge-container.show-chat .lounge-chat-area {
         display: flex !important;
       }
+
       .chat-back-btn {
         display: flex !important;
       }
     }
 
     /* Avatar edit overlay */
-    .avatar-edit-wrap { border-radius: 50%; overflow: hidden; }
+    .avatar-edit-wrap {
+      border-radius: 50%;
+      overflow: hidden;
+    }
+
     .avatar-cam-overlay {
-      position: absolute; inset: 0; border-radius: 50%;
-      background: rgba(0,0,0,0.55); display: flex; align-items: center;
-      justify-content: center; opacity: 0; transition: opacity 0.15s ease;
+      position: absolute;
+      inset: 0;
+      border-radius: 50%;
+      background: rgba(0, 0, 0, 0.55);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      opacity: 0;
+      transition: opacity 0.15s ease;
       pointer-events: none;
     }
-    .avatar-edit-wrap:hover .avatar-cam-overlay { opacity: 1; }
+
+    .avatar-edit-wrap:hover .avatar-cam-overlay {
+      opacity: 1;
+    }
 
     /* Avatar modal drop zone */
     .avatar-drop-zone {
-      border: 2px dashed var(--border); padding: 28px 16px; text-align: center;
-      cursor: pointer; transition: border-color 0.2s, background 0.2s;
+      border: 2px dashed var(--border);
+      padding: 28px 16px;
+      text-align: center;
+      cursor: pointer;
+      transition: border-color 0.2s, background 0.2s;
       position: relative;
     }
-    .avatar-drop-zone:hover, .avatar-drop-zone.drag-over {
-      border-color: var(--foreground); background: rgba(255,255,255,0.04);
+
+    .avatar-drop-zone:hover,
+    .avatar-drop-zone.drag-over {
+      border-color: var(--foreground);
+      background: rgba(255, 255, 255, 0.04);
     }
+
     .avatar-drop-zone input[type="file"] {
-      position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%;
+      position: absolute;
+      inset: 0;
+      opacity: 0;
+      cursor: pointer;
+      width: 100%;
+      height: 100%;
     }
+
     #avatarPreviewImg {
-      width: 80px; height: 80px; border-radius: 50%; object-fit: cover;
-      border: 2px solid var(--border); display: block; margin: 0 auto 12px;
+      width: 80px;
+      height: 80px;
+      border-radius: 50%;
+      object-fit: cover;
+      border: 2px solid var(--border);
+      display: block;
+      margin: 0 auto 12px;
     }
   </style>
 </head>
+
 <body class="bg-dot-matrix">
   <div class="app-container">
     <header>
@@ -1257,7 +1439,8 @@
 
         <div class="lounge-chat-area">
           <div class="chat-header">
-            <button class="chat-back-btn" onclick="goBackToRooms()" title="Back to Rooms" style="background: none; border: 1px solid var(--border); color: var(--foreground); padding: 4px; cursor: pointer; align-items: center; margin-right: 8px;">
+            <button class="chat-back-btn" onclick="goBackToRooms()" title="Back to Rooms"
+              style="background: none; border: 1px solid var(--border); color: var(--foreground); padding: 4px; cursor: pointer; align-items: center; margin-right: 8px;">
               <i data-lucide="arrow-left" style="width: 16px; height: 16px;"></i>
             </button>
             <div class="chat-channel-title">
@@ -1275,7 +1458,8 @@
           <div class="typing-indicator" id="typingIndicator"></div>
 
           <form class="chat-input-row" onsubmit="handleSendChat(event)">
-            <input id="chatInput" class="input-field" placeholder="ENTER MESSAGE OR VIBE CHECK (ENTER TO SEND)..." autocomplete="off" oninput="handleTypingEvent()" />
+            <input id="chatInput" class="input-field" placeholder="ENTER MESSAGE OR VIBE CHECK (ENTER TO SEND)..."
+              autocomplete="off" oninput="handleTypingEvent()" />
             <button type="submit" class="btn btn-sm">
               <i data-lucide="send" style="width: 14px; height: 14px;"></i>
             </button>
@@ -1293,9 +1477,12 @@
               <i data-lucide="qr-code" style="width: 18px; height: 18px;"></i>
               <span>// YOUR FRIEND CODE</span>
             </div>
-            <p style="font-size: 0.82rem; color: var(--secondary); margin-bottom: 16px; font-family: var(--font-inter);">Share this unique access token or scan QR to link devices into your network.</p>
+            <p
+              style="font-size: 0.82rem; color: var(--secondary); margin-bottom: 16px; font-family: var(--font-inter);">
+              Share this unique access token or scan QR to link devices into your network.</p>
             <div style="display: flex; gap: 8px; margin-bottom: 14px;">
-              <input id="myFriendCodeDisplay" class="input-field" readonly style="font-family: var(--font-mono); font-weight: 700; text-align: center; font-size: 1.05rem; letter-spacing: 0.15em;" />
+              <input id="myFriendCodeDisplay" class="input-field" readonly
+                style="font-family: var(--font-mono); font-weight: 700; text-align: center; font-size: 1.05rem; letter-spacing: 0.15em;" />
               <button class="btn btn-secondary" onclick="copyMyFriendCode()" title="Copy Code">
                 <i data-lucide="copy" style="width: 15px; height: 15px;"></i>
               </button>
@@ -1337,7 +1524,8 @@
               <span>// INCOMING REQUESTS</span>
             </div>
             <div id="pendingRequestsList">
-              <p style="color: var(--secondary); font-size: 0.82rem; font-family: var(--font-mono);">// NO PENDING REQUESTS</p>
+              <p style="color: var(--secondary); font-size: 0.82rem; font-family: var(--font-mono);">// NO PENDING
+                REQUESTS</p>
             </div>
           </div>
 
@@ -1346,7 +1534,8 @@
               <i data-lucide="users" style="width: 18px; height: 18px;"></i>
               <span>// CIRCLE NETWORK</span>
             </div>
-            <div id="myConfirmedFriendsList" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 14px;"></div>
+            <div id="myConfirmedFriendsList"
+              style="display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 14px;"></div>
           </div>
         </div>
       </div>
@@ -1354,7 +1543,9 @@
 
     <!-- TAB 4: Profile -->
     <section id="tab-profile" class="tab-content">
-      <div id="profileTabContent" style="max-width: 800px; margin: 0 auto; display: flex; flex-direction: column; gap: 24px; padding-top: 8px;"></div>
+      <div id="profileTabContent"
+        style="max-width: 800px; margin: 0 auto; display: flex; flex-direction: column; gap: 24px; padding-top: 8px;">
+      </div>
     </section>
   </div>
 
@@ -1363,17 +1554,22 @@
   <!-- Modal: Invite Friends with QR Code -->
   <div id="inviteModal" class="modal-backdrop" onclick="if(event.target === this) closeInviteModal()">
     <div class="modal-content">
-      <button class="modal-close" onclick="closeInviteModal()"><i data-lucide="x" style="width: 14px; height: 14px;"></i></button>
+      <button class="modal-close" onclick="closeInviteModal()"><i data-lucide="x"
+          style="width: 14px; height: 14px;"></i></button>
       <div class="panel-title-lg" style="margin-bottom: 6px;">
         <i data-lucide="share-2"></i>
         <span>// INVITE LINK & QR</span>
       </div>
-      <p style="color: var(--secondary); font-size: 0.82rem; margin-bottom: 18px; font-family: var(--font-inter);">Nearby devices can scan with their camera to instantly authenticate and sync circles.</p>
-      
-      <div id="qrcodeContainer" style="display: flex; justify-content: center; background: #fff; padding: 14px; border: 1px solid var(--border); max-width: 190px; margin: 0 auto 16px;"></div>
+      <p style="color: var(--secondary); font-size: 0.82rem; margin-bottom: 18px; font-family: var(--font-inter);">
+        Nearby devices can scan with their camera to instantly authenticate and sync circles.</p>
+
+      <div id="qrcodeContainer"
+        style="display: flex; justify-content: center; background: #fff; padding: 14px; border: 1px solid var(--border); max-width: 190px; margin: 0 auto 16px;">
+      </div>
 
       <div style="display: flex; gap: 8px; margin-bottom: 10px;">
-        <input id="inviteModalLink" class="input-field" readonly style="font-size: 0.78rem; font-family: var(--font-mono);" />
+        <input id="inviteModalLink" class="input-field" readonly
+          style="font-size: 0.78rem; font-family: var(--font-mono);" />
         <button class="btn btn-sm" onclick="copyInviteModalLink()">
           <i data-lucide="copy" style="width: 14px; height: 14px;"></i>
         </button>
@@ -1384,22 +1580,26 @@
   <!-- Modal: Edit Avatar / Profile Picture -->
   <div id="avatarModal" class="modal-backdrop" onclick="if(event.target === this) closeAvatarModal()">
     <div class="modal-content">
-      <button class="modal-close" onclick="closeAvatarModal()"><i data-lucide="x" style="width: 14px; height: 14px;"></i></button>
+      <button class="modal-close" onclick="closeAvatarModal()"><i data-lucide="x"
+          style="width: 14px; height: 14px;"></i></button>
       <div class="panel-title-lg" style="margin-bottom: 6px;">
         <i data-lucide="camera"></i>
         <span id="avatarModalTitle">// CHANGE PROFILE PICTURE</span>
       </div>
-      <p style="color: var(--secondary); font-size: 0.78rem; margin-bottom: 18px; font-family: var(--font-mono);">Upload an image or paste a direct URL. Max 2 MB for uploads.</p>
+      <p style="color: var(--secondary); font-size: 0.78rem; margin-bottom: 18px; font-family: var(--font-mono);">Upload
+        an image or paste a direct URL. Max 2 MB for uploads.</p>
 
       <!-- Preview -->
       <img id="avatarPreviewImg" src="" alt="Preview" />
 
       <!-- Tabs -->
       <div style="display: flex; gap: 0; margin-bottom: 14px; border: 1px solid var(--border);">
-        <button id="avatarTabUpload" class="btn" onclick="switchAvatarTab('upload')" style="flex:1; border:none; border-right: 1px solid var(--border);">
+        <button id="avatarTabUpload" class="btn" onclick="switchAvatarTab('upload')"
+          style="flex:1; border:none; border-right: 1px solid var(--border);">
           <i data-lucide="upload" style="width:13px;height:13px;"></i> UPLOAD
         </button>
-        <button id="avatarTabUrl" class="btn btn-secondary" onclick="switchAvatarTab('url')" style="flex:1; border:none;">
+        <button id="avatarTabUrl" class="btn btn-secondary" onclick="switchAvatarTab('url')"
+          style="flex:1; border:none;">
           <i data-lucide="link" style="width:13px;height:13px;"></i> URL
         </button>
       </div>
@@ -1407,16 +1607,20 @@
       <!-- Upload panel -->
       <div id="avatarUploadPanel">
         <div class="avatar-drop-zone" id="avatarDropZone">
-          <input type="file" id="avatarFileInput" accept="image/jpeg,image/png,image/gif,image/webp" onchange="onAvatarFileSelected(this)" />
+          <input type="file" id="avatarFileInput" accept="image/jpeg,image/png,image/gif,image/webp"
+            onchange="onAvatarFileSelected(this)" />
           <i data-lucide="image-plus" style="width:28px;height:28px;color:var(--secondary);margin-bottom:8px;"></i>
-          <p style="font-family:var(--font-mono);font-size:0.75rem;color:var(--secondary);">DRAG & DROP OR CLICK TO CHOOSE<br/>JPEG · PNG · GIF · WEBP · MAX 2MB</p>
+          <p style="font-family:var(--font-mono);font-size:0.75rem;color:var(--secondary);">DRAG & DROP OR CLICK TO
+            CHOOSE<br />JPEG · PNG · GIF · WEBP · MAX 2MB</p>
         </div>
       </div>
 
       <!-- URL panel -->
       <div id="avatarUrlPanel" style="display:none;">
-        <input id="avatarUrlInput" class="input-field" placeholder="https://..." style="margin-bottom:8px;" oninput="previewAvatarUrl()" />
-        <p style="font-size:0.72rem;color:var(--secondary);font-family:var(--font-mono);">Must be a direct image link (ends in .jpg, .png etc.)</p>
+        <input id="avatarUrlInput" class="input-field" placeholder="https://..." style="margin-bottom:8px;"
+          oninput="previewAvatarUrl()" />
+        <p style="font-size:0.72rem;color:var(--secondary);font-family:var(--font-mono);">Must be a direct image link
+          (ends in .jpg, .png etc.)</p>
       </div>
 
       <button class="btn" id="avatarSaveBtn" style="width:100%;margin-top:14px;" onclick="saveAvatar()">
@@ -1429,14 +1633,17 @@
   <!-- Modal: Edit Status / Mood -->
   <div id="statusModal" class="modal-backdrop" onclick="if(event.target === this) closeStatusModal()">
     <div class="modal-content">
-      <button class="modal-close" onclick="closeStatusModal()"><i data-lucide="x" style="width: 14px; height: 14px;"></i></button>
+      <button class="modal-close" onclick="closeStatusModal()"><i data-lucide="x"
+          style="width: 14px; height: 14px;"></i></button>
       <div class="panel-title-lg">
         <i data-lucide="smile"></i>
         <span>// SET STATUS</span>
       </div>
       <div style="display: flex; gap: 10px; margin-bottom: 14px;">
-        <input id="statusEmojiInput" class="input-field" style="width: 60px; text-align: center; font-size: 1.1rem;" value="🎧" maxlength="2" />
-        <input id="statusTextInput" class="input-field" placeholder="CURRENT MOOD / STATUS (E.G. CODING LATE)" maxlength="60" />
+        <input id="statusEmojiInput" class="input-field" style="width: 60px; text-align: center; font-size: 1.1rem;"
+          value="🎧" maxlength="2" />
+        <input id="statusTextInput" class="input-field" placeholder="CURRENT MOOD / STATUS (E.G. CODING LATE)"
+          maxlength="60" />
       </div>
       <button class="btn" style="width: 100%;" onclick="saveCustomStatus()">[ SAVE STATUS ]</button>
     </div>
@@ -1445,26 +1652,32 @@
   <!-- Modal: Sign in on Another Device -->
   <div id="deviceSigninModal" class="modal-backdrop" onclick="if(event.target === this) closeDeviceSigninModal()">
     <div class="modal-content" style="max-width: 360px;">
-      <button class="modal-close" onclick="closeDeviceSigninModal()"><i data-lucide="x" style="width: 14px; height: 14px;"></i></button>
+      <button class="modal-close" onclick="closeDeviceSigninModal()"><i data-lucide="x"
+          style="width: 14px; height: 14px;"></i></button>
       <div class="panel-title-lg" style="margin-bottom: 6px;">
         <i data-lucide="smartphone"></i>
         <span>// SIGN IN ON ANOTHER DEVICE</span>
       </div>
-      <p style="color: var(--secondary); font-size: 0.8rem; margin-bottom: 18px; font-family: var(--font-inter); line-height: 1.55;">Scan the QR code or open the link on your phone. The code is single-use and expires in 10 minutes.</p>
+      <p
+        style="color: var(--secondary); font-size: 0.8rem; margin-bottom: 18px; font-family: var(--font-inter); line-height: 1.55;">
+        Scan the QR code or open the link on your phone. The code is single-use and expires in 10 minutes.</p>
 
       <!-- QR Code -->
-      <div id="deviceQrContainer" style="display: flex; justify-content: center; background: #fff; padding: 14px; border: 1px solid var(--border); max-width: 200px; margin: 0 auto 16px; position: relative; min-height: 200px; align-items: center;">
+      <div id="deviceQrContainer"
+        style="display: flex; justify-content: center; background: #fff; padding: 14px; border: 1px solid var(--border); max-width: 200px; margin: 0 auto 16px; position: relative; min-height: 200px; align-items: center;">
         <span style="color:#555; font-size:0.75rem;">GENERATING...</span>
       </div>
 
       <!-- Countdown ring + label -->
       <div style="display: flex; align-items: center; justify-content: center; gap: 10px; margin-bottom: 14px;">
         <svg viewBox="0 0 36 36" style="width: 38px; height: 38px; transform: rotate(-90deg);">
-          <circle cx="18" cy="18" r="15.9" fill="none" stroke="var(--border)" stroke-width="2.5"/>
-          <circle id="deviceCountdownRing" cx="18" cy="18" r="15.9" fill="none" stroke="var(--foreground)" stroke-width="2.5"
-            stroke-dasharray="100 100" stroke-dashoffset="0" style="transition: stroke-dashoffset 1s linear;"/>
+          <circle cx="18" cy="18" r="15.9" fill="none" stroke="var(--border)" stroke-width="2.5" />
+          <circle id="deviceCountdownRing" cx="18" cy="18" r="15.9" fill="none" stroke="var(--foreground)"
+            stroke-width="2.5" stroke-dasharray="100 100" stroke-dashoffset="0"
+            style="transition: stroke-dashoffset 1s linear;" />
         </svg>
-        <span id="deviceCountdownLabel" style="font-family: var(--font-mono); font-size: 0.85rem; letter-spacing: 0.1em;">10:00</span>
+        <span id="deviceCountdownLabel"
+          style="font-family: var(--font-mono); font-size: 0.85rem; letter-spacing: 0.1em;">10:00</span>
         <button class="btn btn-sm" onclick="refreshDeviceToken()" title="Generate new code">
           <i data-lucide="refresh-cw" style="width: 13px; height: 13px;"></i>
         </button>
@@ -1472,7 +1685,8 @@
 
       <!-- Link field + copy -->
       <div style="display: flex; gap: 8px;">
-        <input id="deviceSigninLink" class="input-field" readonly style="font-size: 0.7rem; font-family: var(--font-mono);" />
+        <input id="deviceSigninLink" class="input-field" readonly
+          style="font-size: 0.7rem; font-family: var(--font-mono);" />
         <button class="btn btn-sm" onclick="copyDeviceLink()" title="Copy link">
           <i data-lucide="copy" style="width: 14px; height: 14px;"></i>
         </button>
@@ -2064,7 +2278,7 @@
         const res = await fetch('/api/feed', { credentials: 'same-origin' });
         if (!res.ok) throw new Error('Failed to fetch feed');
         const data = await res.json();
-        
+
         const now = Date.now();
         feedData = data.map(f => {
           if (f.playing && f.progressMs !== undefined) {
@@ -2107,7 +2321,7 @@
         filtered = filtered.filter(f => f.playing);
       }
       if (query) {
-        filtered = filtered.filter(f => 
+        filtered = filtered.filter(f =>
           (f.name && f.name.toLowerCase().includes(query)) ||
           (f.track && f.track.toLowerCase().includes(query)) ||
           (f.artists && f.artists.toLowerCase().includes(query))
@@ -2405,7 +2619,7 @@
       activeRoom = roomId;
       socket.emit('join_room', activeRoom);
       document.getElementById('activeRoomTitle').textContent = title;
-      
+
       // Switch view on mobile to show the chat stream
       const container = document.querySelector('.lounge-container');
       if (container) container.classList.add('show-chat');
@@ -2460,7 +2674,7 @@
             const dmRoomId = [currentUser.spotifyId, friend.spotifyId].sort().join('-');
             const isActive = activeRoom === dmRoomId;
             const avatar = friend.avatarUrl || 'https://www.gravatar.com/avatar/00000000000000000000000000000000?d=mp&f=y';
-            
+
             html += `
               <button class="channel-btn ${isActive ? 'active' : ''}" onclick="switchRoom('${dmRoomId}', '@ ${escapeHTML(friend.name).toUpperCase()}')">
                 <img src="${avatar}" style="width: 16px; height: 16px; border: 1px solid var(--border); object-fit: cover; margin-right: 8px;" />
@@ -2698,8 +2912,8 @@
                 <div style="font-size: 0.72rem; color: var(--secondary); font-family: var(--font-mono);">${u.friendCode}</div>
               </div>
             </div>
-            ${u.friendshipStatus === 'friend' ? '<span class="status-badge live">FRIENDS</span>' : 
-              u.friendshipStatus === 'pending_sent' ? '<span class="status-badge offline">SENT</span>' :
+            ${u.friendshipStatus === 'friend' ? '<span class="status-badge live">FRIENDS</span>' :
+            u.friendshipStatus === 'pending_sent' ? '<span class="status-badge offline">SENT</span>' :
               `<button class="btn btn-sm" onclick="sendFriendRequest('${u.spotifyId}')">[ ADD ]</button>`}
           </div>
         `).join('');
@@ -2981,7 +3195,8 @@
     loadUserProfile();
     fetchFeed();
     startProgressTicking();
-    setInterval(fetchFeed, 5000);
+    setInterval(fetchFeed, 10000);
   </script>
 </body>
+
 </html>

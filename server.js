@@ -43,22 +43,64 @@ function generateFriendCode(name = '') {
 }
 
 // --- Cloud / Local Data Storage Engine ---
+let jsonbinDisabled = false;
+
+// --- Spotify Rate Limit & Caching Engine ---
+let spotifyRateLimitUntil = 0;
+const userPlaybackCache = new Map(); // spotifyId -> { data: cardData, timestamp: number }
+const PLAYBACK_CACHE_TTL_MS = 8000; // 8 second cache TTL to reduce Spotify API rate limits
+
+function isSpotifyRateLimited() {
+  return Date.now() < spotifyRateLimitUntil;
+}
+
+function handleSpotifyError(err, context = '') {
+  if (err.response?.status === 429 || err.response?.data?.error?.reason === 'QUOTA_EXCEEDED') {
+    const retryAfter = parseInt(err.response?.headers?.['retry-after'] || '60', 10);
+    const cooldownMs = Math.max(retryAfter, 30) * 1000;
+    spotifyRateLimitUntil = Date.now() + cooldownMs;
+    console.warn(
+      `⚠️ Spotify API 429 Rate Limit / Quota Exceeded during [${context}]. Cooldown active for ${Math.round(cooldownMs / 1000)}s.`
+    );
+  }
+}
+
 async function getDbData() {
   let data = { users: [], messages: [], rooms: [] };
+  let readSuccess = false;
 
-  if (JSONBIN_BIN_ID && JSONBIN_API_KEY) {
+  if (JSONBIN_BIN_ID && JSONBIN_API_KEY && !jsonbinDisabled) {
     try {
       const res = await axios.get(`https://api.jsonbin.io/v3/b/${JSONBIN_BIN_ID}/latest`, {
         headers: { 'X-Master-Key': JSONBIN_API_KEY },
+        timeout: 4000,
       });
       const record = res.data.record || {};
       data.users = record.users || record.friends || [];
       data.messages = record.messages || [];
       data.rooms = record.rooms || [];
+      readSuccess = true;
     } catch (err) {
-      console.error('Failed to read from JSONbin, falling back to local:', err.response?.data || err.message);
+      const errResData = err.response?.data;
+      const errMsg = typeof errResData === 'object' ? JSON.stringify(errResData) : (errResData || err.message);
+      if (
+        err.response?.status === 429 ||
+        err.response?.status === 403 ||
+        err.response?.status === 400 ||
+        (typeof errMsg === 'string' && (errMsg.includes('Requests exhausted') || errMsg.includes('pricing')))
+      ) {
+        if (!jsonbinDisabled) {
+          console.warn('⚠️ JSONbin request quota exhausted. Disabling JSONbin sync and falling back to local file storage (db.json).');
+          jsonbinDisabled = true;
+        }
+      } else {
+        console.error('Failed to read from JSONbin, falling back to local:', errMsg);
+      }
     }
-  } else {
+  }
+
+  // Fallback to local DB if JSONbin failed or was disabled/unconfigured
+  if (!readSuccess) {
     try {
       if (fs.existsSync(dbPath)) {
         const raw = fs.readFileSync(dbPath, 'utf8');
@@ -105,17 +147,36 @@ async function getDbData() {
 }
 
 async function saveDbData(data) {
-  if (JSONBIN_BIN_ID && JSONBIN_API_KEY) {
+  if (JSONBIN_BIN_ID && JSONBIN_API_KEY && !jsonbinDisabled) {
     try {
       await axios.put(`https://api.jsonbin.io/v3/b/${JSONBIN_BIN_ID}`, data, {
         headers: {
           'Content-Type': 'application/json',
           'X-Master-Key': JSONBIN_API_KEY,
         },
+        timeout: 4000,
       });
+      // Backup to local file as well
+      try {
+        fs.writeFileSync(dbPath, JSON.stringify(data, null, 2), 'utf8');
+      } catch (e) {}
       return;
     } catch (err) {
-      console.error('Failed to write to JSONbin, falling back to local:', err.response?.data || err.message);
+      const errResData = err.response?.data;
+      const errMsg = typeof errResData === 'object' ? JSON.stringify(errResData) : (errResData || err.message);
+      if (
+        err.response?.status === 429 ||
+        err.response?.status === 403 ||
+        err.response?.status === 400 ||
+        (typeof errMsg === 'string' && (errMsg.includes('Requests exhausted') || errMsg.includes('pricing')))
+      ) {
+        if (!jsonbinDisabled) {
+          console.warn('⚠️ JSONbin request quota exhausted. Disabling JSONbin sync and saving to local db.json.');
+          jsonbinDisabled = true;
+        }
+      } else {
+        console.error('Failed to write to JSONbin, falling back to local:', errMsg);
+      }
     }
   }
 
@@ -181,40 +242,55 @@ async function ensureFreshToken(user) {
     throw new Error('No refresh token available');
   }
 
-  const tokenRes = await axios.post(
-    'https://accounts.spotify.com/api/token',
-    new URLSearchParams({
-      grant_type: 'refresh_token',
-      refresh_token: user.refreshToken,
-    }),
-    {
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-        Authorization:
-          'Basic ' + Buffer.from(`${SPOTIFY_CLIENT_ID}:${SPOTIFY_CLIENT_SECRET}`).toString('base64'),
-      },
-    }
-  );
-
-  const { access_token, expires_in, refresh_token: new_refresh } = tokenRes.data;
-  const data = await getDbData();
-  const idx = data.users.findIndex((u) => u.spotifyId === user.spotifyId);
-  if (idx > -1) {
-    data.users[idx].accessToken = access_token;
-    data.users[idx].expiresAt = Date.now() + expires_in * 1000;
-    if (new_refresh) {
-      data.users[idx].refreshToken = new_refresh;
-    }
-    await saveDbData(data);
+  if (isSpotifyRateLimited()) {
+    if (user.accessToken) return user.accessToken; // Fallback to current token during cooldown
+    throw new Error('Spotify API rate limited');
   }
-  return access_token;
+
+  try {
+    const tokenRes = await axios.post(
+      'https://accounts.spotify.com/api/token',
+      new URLSearchParams({
+        grant_type: 'refresh_token',
+        refresh_token: user.refreshToken,
+      }),
+      {
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+          Authorization:
+            'Basic ' + Buffer.from(`${SPOTIFY_CLIENT_ID}:${SPOTIFY_CLIENT_SECRET}`).toString('base64'),
+        },
+        timeout: 5000,
+      }
+    );
+
+    const { access_token, expires_in, refresh_token: new_refresh } = tokenRes.data;
+    const data = await getDbData();
+    const idx = data.users.findIndex((u) => u.spotifyId === user.spotifyId);
+    if (idx > -1) {
+      data.users[idx].accessToken = access_token;
+      data.users[idx].expiresAt = Date.now() + expires_in * 1000;
+      if (new_refresh) {
+        data.users[idx].refreshToken = new_refresh;
+      }
+      await saveDbData(data);
+    }
+    return access_token;
+  } catch (err) {
+    handleSpotifyError(err, `token-refresh-${user.name || user.spotifyId}`);
+    throw err;
+  }
 }
 
 // Fetch and cache user top taste (top artists & genres)
 async function fetchUserTaste(accessToken) {
+  if (isSpotifyRateLimited()) {
+    return { topArtists: [], topGenres: [] };
+  }
   try {
     const res = await axios.get('https://api.spotify.com/v1/me/top/artists?limit=20&time_range=medium_term', {
       headers: { Authorization: `Bearer ${accessToken}` },
+      timeout: 5000,
     });
     const items = res.data.items || [];
     const topArtists = items.map((a) => a.name);
@@ -226,6 +302,7 @@ async function fetchUserTaste(accessToken) {
     });
     return { topArtists, topGenres: Array.from(genresSet).slice(0, 20) };
   } catch (err) {
+    handleSpotifyError(err, 'fetchUserTaste');
     console.error('Failed to fetch user top taste:', err.message);
     return { topArtists: [], topGenres: [] };
   }
@@ -277,6 +354,7 @@ app.get('/callback', async (req, res) => {
           Authorization:
             'Basic ' + Buffer.from(`${SPOTIFY_CLIENT_ID}:${SPOTIFY_CLIENT_SECRET}`).toString('base64'),
         },
+        timeout: 6000,
       }
     );
 
@@ -284,14 +362,19 @@ app.get('/callback', async (req, res) => {
 
     const profileRes = await axios.get('https://api.spotify.com/v1/me', {
       headers: { Authorization: `Bearer ${access_token}` },
+      timeout: 6000,
     });
 
     const spotifyId = profileRes.data.id;
     const spotifyProfileName = profileRes.data.display_name || 'Spotify Friend';
     const avatarUrl = profileRes.data.images?.[0]?.url || '';
 
-    // Fetch initial top taste
-    const { topArtists, topGenres } = await fetchUserTaste(access_token);
+    // Fetch initial top taste safely so top taste errors never break login flow
+    let topTaste = { topArtists: [], topGenres: [] };
+    try {
+      topTaste = await fetchUserTaste(access_token);
+    } catch (e) {}
+    const { topArtists, topGenres } = topTaste;
 
     const data = await getDbData();
     let userIndex = data.users.findIndex((u) => u.spotifyId === spotifyId);
@@ -359,7 +442,42 @@ app.get('/callback', async (req, res) => {
 
     res.redirect(`/?connected=${encodeURIComponent(data.users[userIndex].name)}&userId=${encodeURIComponent(spotifyId)}`);
   } catch (err) {
+    handleSpotifyError(err, 'spotify-auth-callback');
     console.error('Error during Spotify Auth callback:', err.response?.data || err.message);
+
+    const isQuotaError =
+      err.response?.status === 429 ||
+      err.response?.data?.error?.reason === 'QUOTA_EXCEEDED' ||
+      (typeof err.response?.data?.error === 'string' && err.response.data.error.includes('429')) ||
+      (typeof err.message === 'string' && (err.message.includes('429') || err.message.includes('QUOTA_EXCEEDED')));
+
+    if (isQuotaError) {
+      return res.status(429).send(`
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <meta charset="utf-8">
+          <title>Spotify Rate Limit Reached</title>
+          <style>
+            body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #0b0f19; color: #f8fafc; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; padding: 20px; box-sizing: border-box; text-align: center; }
+            .card { background: #131c2e; border: 1px solid #1e293b; border-radius: 16px; padding: 40px; max-width: 480px; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.5); }
+            h1 { color: #f43f5e; margin-bottom: 12px; font-size: 22px; }
+            p { color: #94a3b8; font-size: 14px; line-height: 1.6; margin-bottom: 24px; }
+            .btn { display: inline-block; background: #1db954; color: #fff; text-decoration: none; padding: 12px 24px; border-radius: 999px; font-weight: 600; font-size: 14px; transition: transform 0.2s; }
+            .btn:hover { transform: scale(1.04); }
+          </style>
+        </head>
+        <body>
+          <div class="card">
+            <h1>Spotify Rate Limit / Quota Exceeded</h1>
+            <p>Spotify API is currently throttling requests for this client ID (429 Too Many Requests). Please wait 1–2 minutes for the rate limit window to clear, then try logging in again.</p>
+            <a href="/" class="btn">Return to Sharify</a>
+          </div>
+        </body>
+        </html>
+      `);
+    }
+
     res.status(500).json({ message: 'Something went wrong connecting to Spotify. Please try again.' });
   }
 });
@@ -653,6 +771,28 @@ app.get('/api/feed', async (req, res) => {
     const feedResults = await Promise.all(
       targetUsers.map(async (user) => {
         if (user.source === 'ytmusic') return ytm.getCard(user);
+
+        // Check playback cache
+        const cached = userPlaybackCache.get(user.spotifyId);
+        if (cached && Date.now() - cached.timestamp < PLAYBACK_CACHE_TTL_MS) {
+          return cached.data;
+        }
+
+        // If Spotify is currently rate limited, return cached or fallback card without making API calls
+        if (isSpotifyRateLimited()) {
+          if (cached) return cached.data;
+          return {
+            spotifyId: user.spotifyId,
+            name: user.name,
+            avatarUrl: user.avatarUrl,
+            friendCode: user.friendCode,
+            statusMessage: user.statusMessage,
+            statusEmoji: user.statusEmoji,
+            playing: false,
+            lastPlayed: false,
+          };
+        }
+
         try {
           const token = await ensureFreshToken(user);
           const nowPlayingRes = await axios.get(
@@ -660,19 +800,22 @@ app.get('/api/feed', async (req, res) => {
             {
               headers: { Authorization: `Bearer ${token}` },
               validateStatus: (s) => s === 200 || s === 204,
+              timeout: 4000,
             }
           );
+
+          let card = null;
 
           if (nowPlayingRes.status === 204 || !nowPlayingRes.data?.item) {
             try {
               const recentRes = await axios.get(
                 'https://api.spotify.com/v1/me/player/recently-played?limit=1',
-                { headers: { Authorization: `Bearer ${token}` } }
+                { headers: { Authorization: `Bearer ${token}` }, timeout: 4000 }
               );
               const recentItem = recentRes.data?.items?.[0];
               if (recentItem && recentItem.track) {
                 const track = recentItem.track;
-                return {
+                card = {
                   spotifyId: user.spotifyId,
                   name: user.name,
                   avatarUrl: user.avatarUrl,
@@ -692,43 +835,50 @@ app.get('/api/feed', async (req, res) => {
                 };
               }
             } catch (recentErr) {
-              // Ignore
+              handleSpotifyError(recentErr, `recently-played-${user.name}`);
             }
 
-            return {
+            if (!card) {
+              card = {
+                spotifyId: user.spotifyId,
+                name: user.name,
+                avatarUrl: user.avatarUrl,
+                friendCode: user.friendCode,
+                statusMessage: user.statusMessage,
+                statusEmoji: user.statusEmoji,
+                playing: false,
+                lastPlayed: false,
+              };
+            }
+          } else {
+            const item = nowPlayingRes.data.item;
+            card = {
               spotifyId: user.spotifyId,
               name: user.name,
               avatarUrl: user.avatarUrl,
               friendCode: user.friendCode,
               statusMessage: user.statusMessage,
               statusEmoji: user.statusEmoji,
-              playing: false,
-              lastPlayed: false,
+              playing: nowPlayingRes.data.is_playing,
+              track: item.name,
+              artists: item.artists.map((a) => a.name).join(', '),
+              album: item.album?.name,
+              albumArt: item.album?.images?.[0]?.url,
+              progressMs: nowPlayingRes.data.progress_ms,
+              durationMs: item.duration_ms,
+              spotifyUrl: item.external_urls?.spotify,
+              uri: item.uri,
+              previewUrl: item.preview_url,
+              timestamp: Date.now(),
             };
           }
 
-          const item = nowPlayingRes.data.item;
-          return {
-            spotifyId: user.spotifyId,
-            name: user.name,
-            avatarUrl: user.avatarUrl,
-            friendCode: user.friendCode,
-            statusMessage: user.statusMessage,
-            statusEmoji: user.statusEmoji,
-            playing: nowPlayingRes.data.is_playing,
-            track: item.name,
-            artists: item.artists.map((a) => a.name).join(', '),
-            album: item.album?.name,
-            albumArt: item.album?.images?.[0]?.url,
-            progressMs: nowPlayingRes.data.progress_ms,
-            durationMs: item.duration_ms,
-            spotifyUrl: item.external_urls?.spotify,
-            uri: item.uri,
-            previewUrl: item.preview_url,
-            timestamp: Date.now(),
-          };
+          userPlaybackCache.set(user.spotifyId, { data: card, timestamp: Date.now() });
+          return card;
         } catch (err) {
+          handleSpotifyError(err, `feed-${user.name}`);
           console.error(`Feed fetch error for ${user.name}:`, err.message);
+          if (cached) return cached.data;
           return {
             spotifyId: user.spotifyId,
             name: user.name,
