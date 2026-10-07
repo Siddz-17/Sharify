@@ -6,6 +6,7 @@ const axios = require('axios');
 const path = require('path');
 const crypto = require('crypto');
 const cookieSession = require('cookie-session');
+const cookieParser = require('cookie-parser');
 const fs = require('fs');
 const QRCode = require('qrcode');
 
@@ -199,6 +200,9 @@ const io = new Server(server, {
 });
 
 app.use(express.json());
+
+// Persistent remember-me cookies (survives server restarts)
+app.use(cookieParser());
 
 // Safari ITP & HTTPS friendly cookie session
 app.use(
@@ -443,6 +447,9 @@ app.get('/callback', async (req, res) => {
     req.session.spotifyId = spotifyId;
     req.session.displayName = data.users[userIndex].name;
 
+    // Issue a long-lived remember-me cookie so login survives server restarts
+    await issueRememberToken(res, spotifyId);
+
     res.redirect(`/?connected=${encodeURIComponent(data.users[userIndex].name)}&userId=${encodeURIComponent(spotifyId)}`);
   } catch (err) {
     handleSpotifyError(err, 'spotify-auth-callback');
@@ -485,20 +492,91 @@ app.get('/callback', async (req, res) => {
   }
 });
 
+// --- Remember-Me Token Helpers ---
+// Token is stored as a SHA-256 hash in the user's DB record so the plain
+// token only ever lives in the browser cookie — never in the database.
+const REMEMBER_COOKIE = 'sharify_rm';
+const REMEMBER_TTL_MS = 90 * 24 * 60 * 60 * 1000; // 90 days
+
+function hashToken(token) {
+  return crypto.createHash('sha256').update(token).digest('hex');
+}
+
+async function issueRememberToken(res, spotifyId) {
+  const token = crypto.randomBytes(32).toString('hex');
+  const hashed = hashToken(token);
+  // Store hash in DB
+  const data = await getDbData();
+  const idx = data.users.findIndex((u) => u.spotifyId === spotifyId);
+  if (idx > -1) {
+    data.users[idx].rememberTokenHash = hashed;
+    data.users[idx].rememberTokenExpiry = Date.now() + REMEMBER_TTL_MS;
+    await saveDbData(data);
+  }
+  // Set plain token in browser cookie (httpOnly, 90 days)
+  res.cookie(REMEMBER_COOKIE, token, {
+    maxAge: REMEMBER_TTL_MS,
+    httpOnly: true,
+    sameSite: 'lax',
+    // secure: true is handled automatically by HTTPS on Render
+  });
+}
+
+async function clearRememberToken(req, res) {
+  const token = req.cookies?.[REMEMBER_COOKIE];
+  if (token) {
+    // Invalidate the stored hash in DB
+    const data = await getDbData();
+    const hashed = hashToken(token);
+    const idx = data.users.findIndex((u) => u.rememberTokenHash === hashed);
+    if (idx > -1) {
+      data.users[idx].rememberTokenHash = null;
+      data.users[idx].rememberTokenExpiry = null;
+      await saveDbData(data);
+    }
+  }
+  res.clearCookie(REMEMBER_COOKIE);
+}
+
 // --- Logout ---
-app.get('/logout', (req, res) => {
+app.get('/logout', async (req, res) => {
+  await clearRememberToken(req, res);
   req.session = null; // cookie-session: setting to null clears the cookie
   res.redirect('/');
 });
 
-// Helper to get active user from session or header
+// Helper to get active user from session or remember-me cookie
 async function getAuthenticatedUser(req) {
   const data = await getDbData();
+
+  // Fast path: valid cookie-session
   const sessionSpotifyId = req.session?.spotifyId;
-  if (!sessionSpotifyId) return null;
-  const user = data.users.find((u) => u.spotifyId === sessionSpotifyId) || null;
-  if (user?.banned) return null; // banned users are treated as unauthenticated
-  return user;
+  if (sessionSpotifyId) {
+    const user = data.users.find((u) => u.spotifyId === sessionSpotifyId) || null;
+    if (user && !user.banned) return user;
+  }
+
+  // Fallback: remember-me cookie (survives server restarts / secret rotation)
+  const rmToken = req.cookies?.[REMEMBER_COOKIE];
+  if (rmToken) {
+    const hashed = hashToken(rmToken);
+    const user = data.users.find(
+      (u) =>
+        u.rememberTokenHash === hashed &&
+        u.rememberTokenExpiry > Date.now() &&
+        !u.banned
+    );
+    if (user) {
+      // Silently restore the cookie-session so subsequent requests are fast
+      if (req.session != null) {
+        req.session.spotifyId = user.spotifyId;
+        req.session.displayName = user.name;
+      }
+      return user;
+    }
+  }
+
+  return null;
 }
 
 // --- Current User Profile & Friends Endpoint ---
