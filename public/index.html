@@ -2513,18 +2513,29 @@
     }
 
     function startProgressTicking() {
-      if (progressTimer) clearInterval(progressTimer);
-      progressTimer = setInterval(() => {
+      // Cancel any previous ticker (either rAF or interval-based)
+      if (progressTimer) {
+        cancelAnimationFrame(progressTimer);
+        clearInterval(progressTimer);
+        progressTimer = null;
+      }
+      let lastTick = performance.now();
+      function tick(now) {
+        // Use real elapsed ms so the bar never drifts even under CPU load
+        const elapsed = now - lastTick;
+        lastTick = now;
         feedData.forEach(friend => {
           if (friend.playing && friend.progressMs !== undefined && friend.durationMs) {
-            friend.progressMs = Math.min(friend.durationMs, friend.progressMs + 1000);
+            friend.progressMs = Math.min(friend.durationMs, friend.progressMs + elapsed);
             const bar = document.getElementById(`progress-bar-${friend.spotifyId}`);
             const text = document.getElementById(`progress-time-${friend.spotifyId}`);
             if (bar) bar.style.width = `${(friend.progressMs / friend.durationMs) * 100}%`;
-            if (text) text.textContent = msToClock(friend.progressMs);
+            if (text) text.textContent = msToClock(Math.round(friend.progressMs));
           }
         });
-      }, 1000);
+        progressTimer = requestAnimationFrame(tick);
+      }
+      progressTimer = requestAnimationFrame(tick);
     }
 
     async function syncPlayback(targetSpotifyId) {

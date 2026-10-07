@@ -324,7 +324,10 @@ app.get('/login', (req, res) => {
     scope: SCOPES,
     redirect_uri: REDIRECT_URI,
     state,
-    show_dialog: 'true',
+    // NOTE: show_dialog is intentionally omitted so that returning users are
+    // silently re-authenticated with their existing Spotify account rather than
+    // being shown the account-picker (which caused a new DB user to be created
+    // whenever someone chose a different account or re-logged in).
   });
   res.redirect(`https://accounts.spotify.com/authorize?${params.toString()}`);
 });
@@ -775,6 +778,11 @@ app.get('/api/feed', async (req, res) => {
         // Check playback cache
         const cached = userPlaybackCache.get(user.spotifyId);
         if (cached && Date.now() - cached.timestamp < PLAYBACK_CACHE_TTL_MS) {
+          // Re-stamp the cached card so the client's latency compensation
+          // (now - timestamp) stays accurate even when serving from cache.
+          if (cached.data && cached.data.playing) {
+            cached.data.timestamp = Date.now();
+          }
           return cached.data;
         }
 
