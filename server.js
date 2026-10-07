@@ -1150,6 +1150,8 @@ app.post('/api/ytmusic/connect', async (req, res) => {
     ytm.seed(user.spotifyId, result.item);
     req.session.spotifyId = user.spotifyId;
     req.session.displayName = user.name;
+    // Issue persistent remember-me cookie — same as Spotify login
+    await issueRememberToken(res, user.spotifyId);
     res.json({ success: true, userId: user.spotifyId });
   } catch (err) {
     console.error('YT connect error:', err.message);
