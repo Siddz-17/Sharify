@@ -1772,6 +1772,52 @@ app.delete('/api/admin/users/:id', requireAdmin, async (req, res) => {
   res.json({ success: true, name });
 });
 
+// Admin: add a brand-new YT Music user (name + raw headers)
+app.post('/api/admin/ytmusic/add', requireAdmin, async (req, res) => {
+  try {
+    const name = String(req.body.name || '').trim().slice(0, 30);
+    const rawHeaders = String(req.body.headers || '').trim();
+    if (!name) return res.status(400).json({ error: 'A display name is required.' });
+    if (!rawHeaders) return res.status(400).json({ error: 'No headers provided.' });
+    if (!ytm.enabled) return res.status(503).json({ error: 'YT Music is not enabled on this server.' });
+
+    const result = await ytm.connect(rawHeaders);
+    if (!result.ok) return res.status(400).json({ error: result.error || 'Headers invalid or YT Music unreachable.' });
+
+    const data = await getDbData();
+
+    // Duplicate-login guard — reuse existing user if name matches
+    let idx = data.users.findIndex(
+      (u) => u.source === 'ytmusic' && u.name.toLowerCase() === name.toLowerCase()
+    );
+
+    if (idx > -1) {
+      // Reconnect: just refresh the credentials
+      data.users[idx].ytAuthEnc = result.authEnc;
+    } else {
+      const id = 'yt_' + require('crypto').randomBytes(8).toString('hex');
+      data.users.push({
+        spotifyId: id, name, spotifyProfileName: name, avatarUrl: '',
+        friendCode: generateFriendCode(name),
+        friends: [], friendRequestsReceived: [], friendRequestsSent: [],
+        statusMessage: 'Just joined Sharify! 🎧', statusEmoji: '✨',
+        source: 'ytmusic', ytAuthEnc: result.authEnc,
+        topArtists: [], topGenres: [],
+        createdAt: new Date().toISOString(),
+      });
+      idx = data.users.length - 1;
+    }
+
+    await saveDbData(data);
+    const user = data.users[idx];
+    ytm.seed(user.spotifyId, result.item);
+
+    res.json({ success: true, userId: user.spotifyId, name: user.name, friendCode: user.friendCode });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Admin: re-connect a YT Music user's headers on their behalf
 app.post('/api/admin/users/:id/ytmusic', requireAdmin, async (req, res) => {
   try {
@@ -1887,6 +1933,7 @@ tr:hover td{background:#050505}
       <option value="banned">BANNED</option>
     </select>
     <button class="btn-sm" onclick="loadUsers()">[ REFRESH ]</button>
+    <button class="btn-sm btn-yt" onclick="openAddYt()" style="margin-left:auto;">[ + ADD YT USER ]</button>
   </div>
   <table>
     <thead><tr>
@@ -1998,6 +2045,46 @@ async function removeUser(id, name) {
   updateStats(); renderTable();
 }
 
+// ---- Add YT Music User Modal ----
+function openAddYt() {
+  document.getElementById('addYtName').value = '';
+  document.getElementById('addYtHeaders').value = '';
+  document.getElementById('addYtStatus').textContent = '';
+  document.getElementById('addYtModal').style.display = 'flex';
+}
+function closeAddYt() {
+  document.getElementById('addYtModal').style.display = 'none';
+}
+async function submitAddYt() {
+  const name = document.getElementById('addYtName').value.trim();
+  const headers = document.getElementById('addYtHeaders').value.trim();
+  const status = document.getElementById('addYtStatus');
+  const btn = document.getElementById('addYtBtn');
+  if (!name) { status.textContent = 'Enter a display name.'; status.style.color='#f87171'; return; }
+  if (!headers) { status.textContent = 'Paste headers first.'; status.style.color='#f87171'; return; }
+  btn.disabled = true; btn.textContent = '[ VALIDATING... ]';
+  status.textContent = 'Running Python check — this takes ~5s...';
+  status.style.color = '#888';
+  try {
+    const res = await fetch('/api/admin/ytmusic/add', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, headers }),
+    });
+    const d = await res.json();
+    if (!res.ok) {
+      status.textContent = '✗ ' + (d.error || 'Failed.');
+      status.style.color = '#f87171';
+    } else {
+      status.textContent = '✓ ' + d.name + ' added! Code: ' + d.friendCode;
+      status.style.color = '#4ade80';
+      setTimeout(closeAddYt, 2200);
+      loadUsers();
+    }
+  } catch(e) { status.textContent = 'Network error.'; status.style.color='#f87171'; }
+  finally { btn.disabled = false; btn.textContent = '[ ADD USER ]'; }
+}
+
 // ---- YT Fix Modal ----
 let _ytFixId = null;
 
@@ -2052,6 +2139,25 @@ function showToast(msg) {
 loadUsers();
 setInterval(loadUsers, 30000); // auto-refresh every 30s
 </script>
+
+<!-- Add YT User Modal -->
+<div id="addYtModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:9999;align-items:center;justify-content:center;">
+  <div style="background:#0a0a0a;border:1px solid #2a2a2a;padding:32px;max-width:520px;width:100%;margin:16px;position:relative;">
+    <button onclick="closeAddYt()" style="position:absolute;top:12px;right:14px;background:none;border:none;color:#555;cursor:pointer;font-size:1.1rem;">✕</button>
+    <div style="font-family:'JetBrains Mono',monospace;font-size:.9rem;letter-spacing:.2em;text-transform:uppercase;margin-bottom:6px;">// ADD YT MUSIC USER</div>
+    <p style="font-size:.75rem;color:#555;font-family:'JetBrains Mono',monospace;margin-bottom:14px;">Add a friend's YT Music account using their request headers. They don't need to do anything themselves.</p>
+    <input id="addYtName" type="text" placeholder="DISPLAY NAME" maxlength="30"
+      style="width:100%;background:#050505;border:1px solid #2a2a2a;color:#ccc;padding:10px;font-family:'JetBrains Mono',monospace;font-size:.8rem;outline:none;margin-bottom:10px;" />
+    <p style="font-size:.72rem;color:#555;font-family:'JetBrains Mono',monospace;margin-bottom:8px;">Open music.youtube.com → DevTools (F12) → Network → filter "browse" → right-click a POST → Copy → Paste request headers below.</p>
+    <textarea id="addYtHeaders" rows="7" placeholder="PASTE REQUEST HEADERS HERE"
+      style="width:100%;background:#050505;border:1px solid #2a2a2a;color:#ccc;padding:10px;font-family:'JetBrains Mono',monospace;font-size:.75rem;resize:vertical;outline:none;margin-bottom:10px;"></textarea>
+    <div id="addYtStatus" style="font-family:'JetBrains Mono',monospace;font-size:.75rem;min-height:18px;margin-bottom:12px;"></div>
+    <button id="addYtBtn" onclick="submitAddYt()"
+      style="width:100%;background:#fff;color:#000;border:none;padding:11px;font-family:'JetBrains Mono',monospace;font-size:.8rem;font-weight:600;letter-spacing:.15em;text-transform:uppercase;cursor:pointer;">
+      [ ADD USER ]
+    </button>
+  </div>
+</div>
 
 <!-- YT Fix Modal -->
 <div id="ytFixModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:9999;align-items:center;justify-content:center;">
